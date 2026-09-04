@@ -1,0 +1,3 @@
+-- Database migrations directory
+-- Add numbered migration files here as the schema evolves.
+-- Example: 001_add_user_auth.sql
