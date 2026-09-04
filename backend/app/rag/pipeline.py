@@ -17,6 +17,7 @@ from app.services.retrieval.hybrid_retriever import HybridRetriever, RetrievedCh
 from app.services.reranking.reranker import Reranker
 from app.services.generation import GenerationService
 from app.services.citations.citation_builder import CitationBuilder
+from app.services.what_if.service import WhatIfService
 
 logger = logging.getLogger(__name__)
 
@@ -35,6 +36,12 @@ class RAGPipeline:
         self.reranker = Reranker()
         self.generation_service = GenerationService()
         self.citation_builder = CitationBuilder()
+        self.what_if_service = WhatIfService(
+            retriever=self.retriever,
+            reranker=self.reranker,
+            generation_service=self.generation_service,
+            citation_builder=self.citation_builder,
+        )
 
     async def process_query(self, request: RAGQueryRequest) -> RAGResponse:
         """Process a troubleshooting query through the full RAG pipeline.
@@ -46,6 +53,22 @@ class RAGPipeline:
             Structured RAGResponse with answer, citations, and state flags.
         """
         logger.info(f"Processing query: {request.query[:100]}...")
+
+        # Step 0: Check if What-If Analysis applies (natural language or explicit mode)
+        is_what_if = self.what_if_service.analyzer.is_what_if_query(
+            query=request.query,
+            explicit_flag=request.is_what_if,
+        )
+        if is_what_if:
+            conversation_history = None
+            if request.conversation_id:
+                conversation_history = await self._get_conversation_history(
+                    request.conversation_id
+                )
+            return await self.what_if_service.process_what_if(
+                request=request,
+                conversation_history=conversation_history,
+            )
 
         # Step 1: Analyze the query
         analysis = self.query_analyzer.analyze(

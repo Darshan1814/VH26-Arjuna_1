@@ -7,7 +7,14 @@ import { ChatInput } from "@/components/chat/chat-input";
 import { Wrench, Trash2 } from "lucide-react";
 
 export default function ChatPage() {
-  const { messages, isLoading, sendMessage, clearChat } = useChat();
+  const {
+    messages,
+    isLoading,
+    sendMessage,
+    clearChat,
+    isWhatIfMode,
+    toggleWhatIfMode,
+  } = useChat();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new messages
@@ -20,11 +27,18 @@ export default function ChatPage() {
       {/* Chat header */}
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div>
-          <h1 className="text-lg font-semibold text-[var(--color-text)]">
-            Troubleshooting Assistant
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-lg font-semibold text-[var(--color-text)]">
+              Troubleshooting Assistant
+            </h1>
+            {isWhatIfMode && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 dark:bg-purple-900/40 px-2 py-0.5 text-xs font-medium text-purple-700 dark:text-purple-300">
+                🔮 What-If Mode
+              </span>
+            )}
+          </div>
           <p className="text-xs text-[var(--color-text-muted)]">
-            Ask about error codes, machine issues, or troubleshooting steps
+            Ask about error codes, troubleshooting steps, or hypothetical scenarios
           </p>
         </div>
         {messages.length > 0 && (
@@ -54,7 +68,12 @@ export default function ChatPage() {
 
       {/* Input area */}
       <div className="border-t p-4">
-        <ChatInput onSend={sendMessage} isLoading={isLoading} />
+        <ChatInput
+          onSend={sendMessage}
+          isLoading={isLoading}
+          isWhatIfMode={isWhatIfMode}
+          onToggleWhatIf={toggleWhatIfMode}
+        />
       </div>
     </div>
   );
@@ -75,13 +94,14 @@ function EmptyState({ onSelectSuggestion }: EmptyStateProps) {
       </h2>
       <p className="max-w-sm text-sm text-[var(--color-text-muted)] mb-6">
         Get diagnostic help from service manuals. Ask about error codes, 
-        symptoms, or troubleshooting procedures.
+        symptoms, or test hypothetical What-If scenarios.
       </p>
       <div className="grid gap-2 text-left w-full max-w-sm">
         {[
           "What does error E101 mean?",
           "Why is my CNC-X100 overheating?",
-          "What does E101 mean on PRESS-Z200?",
+          "What if I continue running the machine?",
+          "Which is better: cleaning ventilation or replacing the fan?",
         ].map((suggestion) => (
           <button
             key={suggestion}

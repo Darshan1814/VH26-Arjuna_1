@@ -9,12 +9,17 @@ export function useChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedMachineId, setSelectedMachineId] = useState<string | undefined>();
   const [conversationId, setConversationId] = useState<string | undefined>();
+  const [isWhatIfMode, setIsWhatIfMode] = useState(false);
   const messageIdCounter = useRef(0);
 
   const generateId = () => {
     messageIdCounter.current += 1;
     return `msg-${Date.now()}-${messageIdCounter.current}`;
   };
+
+  const toggleWhatIfMode = useCallback(() => {
+    setIsWhatIfMode((prev) => !prev);
+  }, []);
 
   const sendMessage = useCallback(
     async (content: string) => {
@@ -45,6 +50,7 @@ export function useChat() {
           query: content.trim(),
           machine_id: selectedMachineId,
           conversation_id: conversationId,
+          is_what_if: isWhatIfMode ? true : undefined,
         };
 
         const response = await queryRAG(request);
@@ -88,7 +94,7 @@ export function useChat() {
         setIsLoading(false);
       }
     },
-    [isLoading, selectedMachineId, conversationId]
+    [isLoading, selectedMachineId, conversationId, isWhatIfMode]
   );
 
   const clearChat = useCallback(() => {
@@ -104,5 +110,8 @@ export function useChat() {
     selectedMachineId,
     setSelectedMachineId,
     conversationId,
+    isWhatIfMode,
+    setIsWhatIfMode,
+    toggleWhatIfMode,
   };
 }

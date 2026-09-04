@@ -12,6 +12,9 @@ class RAGQueryRequest(BaseModel):
     machine_id: Optional[str] = None
     conversation_id: Optional[str] = None
 
+    # Optional What-If Analysis mode flag
+    is_what_if: Optional[bool] = None
+
     # Optional overrides for retrieval tuning
     top_k: int = 10
     rerank_top_k: int = 5

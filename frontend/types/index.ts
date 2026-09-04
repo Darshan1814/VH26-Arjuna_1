@@ -8,9 +8,41 @@ export interface Citation {
   manual: string;
   machine_model: string;
   section?: string;
+  heading?: string;
   page?: number;
+  pdf_page?: number;
   chunk_id?: string;
   relevance_score?: number;
+}
+
+export interface WhatIfComparisonItem {
+  action: string;
+  relevance: string;
+  intervention_level: string;
+  manual_supported: boolean;
+  notes?: string;
+}
+
+export interface WhatIfEvidenceItem {
+  evidence_type: "manual" | "inference" | "unknown";
+  statement: string;
+  citation_ref?: string;
+}
+
+export interface WhatIfAnalysis {
+  scenario_type: string;
+  current_situation: Record<string, any>;
+  hypothetical_action: string;
+  possible_outcome?: string;
+  why?: string;
+  documented_facts: string[];
+  reasoned_inferences: string[];
+  unknowns: string[];
+  timeline: string[];
+  comparison_table: WhatIfComparisonItem[];
+  recommended_action?: string;
+  safety_warning?: string;
+  evidence_items: WhatIfEvidenceItem[];
 }
 
 export interface RAGResponse {
@@ -24,6 +56,8 @@ export interface RAGResponse {
   ambiguous_machines: string[];
   is_insufficient: boolean;
   insufficient_message?: string;
+  is_what_if?: boolean;
+  what_if_analysis?: WhatIfAnalysis;
   detected_error_code?: string;
   detected_machine?: string;
   query_type?: string;
@@ -83,6 +117,7 @@ export interface RAGQueryRequest {
   query: string;
   machine_id?: string;
   conversation_id?: string;
+  is_what_if?: boolean;
   top_k?: number;
   rerank_top_k?: number;
   similarity_threshold?: number;

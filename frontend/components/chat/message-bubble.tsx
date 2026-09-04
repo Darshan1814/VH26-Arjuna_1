@@ -70,8 +70,95 @@ export function MessageBubble({ message }: Props) {
               </div>
             )}
 
-            {/* Probable causes */}
-            {(rag.probable_causes?.length ?? 0) > 0 && (
+            {/* What-If Analysis Evidence Panel & Structured Details */}
+            {rag.is_what_if && rag.what_if_analysis && (
+              <div className="rounded-lg border border-purple-200 dark:border-purple-900/50 bg-purple-50/40 dark:bg-purple-950/20 p-3 space-y-2.5 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-purple-700 dark:text-purple-300">
+                    <span>🔮</span> What-If Analysis Grounding
+                  </span>
+                  {rag.what_if_analysis.scenario_type && (
+                    <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded-full bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 font-semibold">
+                      {rag.what_if_analysis.scenario_type.replace(/_/g, " ")}
+                    </span>
+                  )}
+                </div>
+
+                {/* Evidence Panel (Expandable) */}
+                <details className="group text-xs text-[var(--color-text-secondary)]" open>
+                  <summary className="cursor-pointer font-medium text-purple-800 dark:text-purple-200 hover:underline flex items-center gap-1 py-1">
+                    <span>🔍</span> Why this analysis? (Manual Evidence & Inferences)
+                  </summary>
+                  <div className="mt-2 space-y-1.5 pl-2.5 border-l-2 border-purple-300 dark:border-purple-800">
+                    {rag.what_if_analysis.documented_facts?.map((fact, i) => (
+                      <div key={`doc-${i}`} className="flex items-start gap-1.5">
+                        <span className="flex-shrink-0">📘</span>
+                        <span><strong className="text-[var(--color-text)]">Manual Evidence:</strong> {fact}</span>
+                      </div>
+                    ))}
+                    {rag.what_if_analysis.reasoned_inferences?.map((inf, i) => (
+                      <div key={`inf-${i}`} className="flex items-start gap-1.5">
+                        <span className="flex-shrink-0">🧠</span>
+                        <span><strong className="text-[var(--color-text)]">Reasoned Inference:</strong> {inf}</span>
+                      </div>
+                    ))}
+                    {rag.what_if_analysis.unknowns?.map((unk, i) => (
+                      <div key={`unk-${i}`} className="flex items-start gap-1.5 text-[var(--color-text-muted)]">
+                        <span className="flex-shrink-0">❓</span>
+                        <span><strong>Unknown:</strong> {unk}</span>
+                      </div>
+                    ))}
+                  </div>
+                </details>
+
+                {/* Action Comparison Table if present */}
+                {(rag.what_if_analysis.comparison_table?.length ?? 0) > 0 && (
+                  <div className="mt-2 overflow-x-auto">
+                    <p className="text-xs font-semibold text-[var(--color-text)] mb-1">
+                      Action Comparison
+                    </p>
+                    <table className="w-full text-left text-xs border-collapse border rounded">
+                      <thead>
+                        <tr className="border-b bg-[var(--color-surface)] text-[var(--color-text-muted)]">
+                          <th className="p-1.5 font-semibold">Action</th>
+                          <th className="p-1.5 font-semibold">Relevance</th>
+                          <th className="p-1.5 font-semibold">Intervention</th>
+                          <th className="p-1.5 font-semibold">Documentation</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-[var(--color-border)]">
+                        {rag.what_if_analysis.comparison_table.map((item, i) => (
+                          <tr key={i} className="text-[var(--color-text-secondary)]">
+                            <td className="p-1.5 font-medium text-[var(--color-text)]">{item.action}</td>
+                            <td className="p-1.5">{item.relevance}</td>
+                            <td className="p-1.5">{item.intervention_level}</td>
+                            <td className="p-1.5">{item.manual_supported ? "✅ Supported" : "⚠️ Unverified"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* Hypothetical progression timeline if present */}
+                {(rag.what_if_analysis.timeline?.length ?? 0) > 1 && (
+                  <div className="mt-2 pt-2 border-t border-purple-200 dark:border-purple-900/40 text-xs">
+                    <p className="font-semibold text-[var(--color-text)] mb-1">Hypothetical Progression</p>
+                    <div className="space-y-1">
+                      {rag.what_if_analysis.timeline.map((step, i) => (
+                        <div key={i} className="flex items-center gap-1.5 text-[var(--color-text-secondary)]">
+                          <span className="h-1.5 w-1.5 rounded-full bg-purple-500 flex-shrink-0" />
+                          <span>{step}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Probable causes (when not what-if or when provided) */}
+            {!rag.is_what_if && (rag.probable_causes?.length ?? 0) > 0 && (
               <div className="rounded-lg border p-3 text-sm">
                 <p className="text-xs font-medium text-[var(--color-text-muted)] mb-1.5">
                   Probable Causes
@@ -87,8 +174,8 @@ export function MessageBubble({ message }: Props) {
               </div>
             )}
 
-            {/* Corrective steps */}
-            {(rag.corrective_steps?.length ?? 0) > 0 && (
+            {/* Corrective steps (when not what-if or when provided) */}
+            {!rag.is_what_if && (rag.corrective_steps?.length ?? 0) > 0 && (
               <div className="rounded-lg border p-3 text-sm">
                 <p className="text-xs font-medium text-[var(--color-text-muted)] mb-1.5">
                   Corrective Steps
@@ -106,6 +193,11 @@ export function MessageBubble({ message }: Props) {
             {/* Confidence + Citations row */}
             <div className="flex items-center gap-2 flex-wrap">
               <ConfidenceBadge confidence={rag.confidence ?? 0} />
+              {rag.is_what_if && (
+                <span className="badge bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 border border-purple-300 dark:border-purple-700">
+                  🔮 What-If Analysis
+                </span>
+              )}
               {rag.detected_error_code && (
                 <span className="badge-info">
                   {rag.detected_error_code}
