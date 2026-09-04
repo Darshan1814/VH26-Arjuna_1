@@ -1,0 +1,13 @@
+apiVersion: v2
+name: industrial-rag
+description: Helm chart for Industrial RAG Machine Troubleshooter on Minikube
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+keywords:
+  - industrial-rag
+  - fast-api
+  - rag
+  - minikube
+maintainers:
+  - name: DevOps Team

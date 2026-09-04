@@ -1,0 +1,75 @@
+# Default values for industrial-rag Helm chart on Minikube.
+
+appName: industrial-rag
+
+# Number of initial replicas (used when autoscaling is disabled)
+replicaCount: 2
+
+image:
+  repository: industrial-rag
+  # Overridden during pipeline run by --set image.tag=${IMAGE_TAG}
+  tag: latest
+  # Use 'Never' for images built directly inside Minikube's Docker daemon
+  # or loaded via 'minikube image load'. Use 'IfNotPresent' if using a registry.
+  pullPolicy: Never
+
+service:
+  type: ClusterIP
+  port: 8000
+  targetPort: 8000
+
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "180"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "180"
+  host: industrial-rag.local
+  path: /
+  pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 250m
+    memory: 512Mi
+  limits:
+    cpu: 1000m
+    memory: 2Gi
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+
+healthCheck:
+  path: /health
+  port: 8000
+  initialDelaySeconds: 20
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Non-sensitive application configuration
+env:
+  BACKEND_HOST: "0.0.0.0"
+  BACKEND_PORT: "8000"
+  LOG_LEVEL: "info"
+  EMBEDDING_MODEL: "BAAI/bge-m3"
+  EMBEDDING_DIMENSION: "1024"
+  RERANKER_MODEL: "BAAI/bge-reranker-v2-m3"
+  HF_HOME: "/app/model_cache"
+  SUPABASE_STORAGE_BUCKET: "manuals"
+  AZURE_OPENAI_VERSION: "2025-01-01-preview"
+  AZURE_OPENAI_DEPLOYMENT: "gpt-5-mini"
+  MODEL_GEN: "gpt-5.4"
+
+# Sensitive application configuration (stored in Kubernetes Secret)
+secrets:
+  AZURE_OPENAI_ENDPOINT: ""
+  AZURE_OPENAI_KEY: ""
+  SUPABASE_URL: ""
+  SUPABASE_KEY: ""
+  SUPABASE_SERVICE_ROLE_KEY: ""
+  DATABASE_URL: ""
