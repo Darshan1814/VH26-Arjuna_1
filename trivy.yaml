@@ -1,0 +1,29 @@
+# =============================================================================
+# Trivy Vulnerability & Security Scanner Configuration
+# =============================================================================
+
+format: table
+exit-code: 1
+severity:
+  - HIGH
+  - CRITICAL
+ignore-unfixed: true
+
+scan:
+  scanners:
+    - vuln
+    - misconfig
+    - secret
+    - license
+
+vulnerability:
+  type:
+    - os
+    - library
+
+misconfiguration:
+  scanners:
+    - dockerfile
+
+cache:
+  dir: .trivy-cache
