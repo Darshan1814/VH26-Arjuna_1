@@ -1,7 +1,10 @@
+import logging
 import time
+from contextlib import asynccontextmanager
+from typing import AsyncGenerator
+
 from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from app.api.router import api_router
 from app.core.config import settings
@@ -10,6 +13,8 @@ from app.core.metrics import (
     HTTP_REQUESTS_TOTAL,
     HTTP_REQUEST_DURATION_SECONDS,
     ACTIVE_REQUESTS,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
 )
 
 logger = logging.getLogger(__name__)

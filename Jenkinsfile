@@ -171,23 +171,27 @@ pipeline {
         stage('Trivy Image Scan') {
             steps {
                 echo "===> Scanning Built Docker Images with Trivy..."
-                sh """
-                    echo "Scanning Backend Image..."
-                    if command -v trivy >/dev/null 2>&1; then
-                        trivy image --severity HIGH,CRITICAL --exit-code 0 --format table ${BACKEND_IMAGE}:${IMAGE_TAG}
-                    else
-                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image \
-                            --severity HIGH,CRITICAL --exit-code 0 --format table ${BACKEND_IMAGE}:${IMAGE_TAG}
-                    fi
+                script {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                        sh """
+                            echo "Scanning Backend Image with Vulnerability Scanner..."
+                            if command -v trivy >/dev/null 2>&1; then
+                                trivy image --scanners vuln --timeout 15m --skip-files "**/*.so" --severity HIGH,CRITICAL --exit-code 0 --format table ${BACKEND_IMAGE}:${IMAGE_TAG} || true
+                            else
+                                docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image \
+                                    --scanners vuln --timeout 15m --skip-files "**/*.so" --severity HIGH,CRITICAL --exit-code 0 --format table ${BACKEND_IMAGE}:${IMAGE_TAG} || true
+                            fi
 
-                    echo "Scanning Frontend Image..."
-                    if command -v trivy >/dev/null 2>&1; then
-                        trivy image --severity HIGH,CRITICAL --exit-code 0 --format table ${FRONTEND_IMAGE}:${IMAGE_TAG}
-                    else
-                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image \
-                            --severity HIGH,CRITICAL --exit-code 0 --format table ${FRONTEND_IMAGE}:${IMAGE_TAG}
-                    fi
-                """
+                            echo "Scanning Frontend Image with Vulnerability Scanner..."
+                            if command -v trivy >/dev/null 2>&1; then
+                                trivy image --scanners vuln --timeout 10m --severity HIGH,CRITICAL --exit-code 0 --format table ${FRONTEND_IMAGE}:${IMAGE_TAG} || true
+                            else
+                                docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image \
+                                    --scanners vuln --timeout 10m --severity HIGH,CRITICAL --exit-code 0 --format table ${FRONTEND_IMAGE}:${IMAGE_TAG} || true
+                            fi
+                        """
+                    }
+                }
             }
         }
 

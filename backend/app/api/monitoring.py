@@ -4,13 +4,14 @@ import logging
 from typing import Optional, Dict, Any
 from fastapi import APIRouter, Response, Request
 from pydantic import BaseModel
-from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
 
 from app.core.metrics import (
     SONARQUBE_QUALITY_GATE_STATUS,
     TRIVY_VULNERABILITIES_COUNT,
     PIPELINE_BUILD_STATUS,
     KUBERNETES_POD_HEALTH,
+    generate_latest,
+    CONTENT_TYPE_LATEST,
 )
 
 logger = logging.getLogger(__name__)

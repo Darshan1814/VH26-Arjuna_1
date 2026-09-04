@@ -8,7 +8,35 @@ Tracks:
 5. Kubernetes pod health status.
 """
 
-from prometheus_client import Counter, Gauge, Histogram, REGISTRY
+try:
+    from prometheus_client import Counter, Gauge, Histogram, generate_latest, CONTENT_TYPE_LATEST
+    PROMETHEUS_AVAILABLE = True
+except ImportError:
+    PROMETHEUS_AVAILABLE = False
+
+    class _DummyMetric:
+        def __init__(self, *args, **kwargs):
+            pass
+        def labels(self, *args, **kwargs):
+            return self
+        def inc(self, *args, **kwargs):
+            pass
+        def dec(self, *args, **kwargs):
+            pass
+        def set(self, *args, **kwargs):
+            pass
+        def observe(self, *args, **kwargs):
+            pass
+
+    Counter = _DummyMetric
+    Gauge = _DummyMetric
+    Histogram = _DummyMetric
+
+    def generate_latest():
+        return b"# prometheus_client not installed\n"
+
+    CONTENT_TYPE_LATEST = "text/plain; version=0.0.4; charset=utf-8"
+
 
 # =============================================================================
 # 1. API & HTTP Metrics
