@@ -100,12 +100,15 @@ pipeline {
                                             -Dsonar.token="${sonarToken}" \
                                             -Dsonar.projectKey=industrial-machine-troubleshooting-system
                                     else
-                                        echo "sonar-scanner CLI not present on agent, running SonarScanner CLI via Docker..."
-                                        docker run --rm \
-                                            -e SONAR_HOST_URL="\${SONAR_HOST_URL:-http://localhost:9000}" \
+                                        echo "sonar-scanner CLI not present on agent, running SonarScanner CLI via Docker with host networking..."
+                                        docker run --rm --network host \
+                                            -e SONAR_HOST_URL="${SONAR_HOST_URL:-http://localhost:9000}" \
                                             -e SONAR_TOKEN="${sonarToken}" \
-                                            -v "\${WORKSPACE}":/usr/src \
-                                            sonarsource/sonar-scanner-cli:latest || true
+                                            -v "${WORKSPACE}":/usr/src \
+                                            sonarsource/sonar-scanner-cli:latest \
+                                            -Dsonar.host.url="${SONAR_HOST_URL:-http://localhost:9000}" \
+                                            -Dsonar.token="${sonarToken}" \
+                                            -Dsonar.projectKey=industrial-machine-troubleshooting-system || true
                                     fi
                                 """
                             }
