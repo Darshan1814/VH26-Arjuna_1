@@ -257,6 +257,12 @@ pipeline {
                         kubectl top nodes 2>/dev/null || true
                         kubectl describe nodes | grep -A 5 "Allocated resources" || true
 
+                        echo "Cleaning up old release to free node resources..."
+                        helm uninstall ${HELM_RELEASE} --namespace ${K8S_NAMESPACE} --wait 2>/dev/null || true
+                        echo "Waiting for old pods to terminate..."
+                        kubectl delete pods -l "app.kubernetes.io/part-of=machine-troubleshooting-system" -n ${K8S_NAMESPACE} --grace-period=10 2>/dev/null || true
+                        sleep 15
+
                         echo "Upgrading or Installing Helm Release '${HELM_RELEASE}'..."
                         helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
                             --namespace ${K8S_NAMESPACE} \
@@ -272,9 +278,7 @@ pipeline {
                             --set secrets.supabaseKey="${SUPABASE_KEY}" \
                             --set secrets.supabaseServiceRoleKey="${SUPABASE_SERVICE_ROLE_KEY}" \
                             --timeout 15m \
-                            --atomic \
-                            --force \
-                            --cleanup-on-fail || {
+                            --wait || {
                                 echo "=== HELM DEPLOY FAILED - GATHERING DIAGNOSTICS ==="
                                 echo "--- Pod Status ---"
                                 kubectl get pods -n ${K8S_NAMESPACE} -o wide 2>/dev/null || true
