@@ -32,7 +32,7 @@ async def rag_query(request: RAGQueryRequest):
     2. Retrieve relevant document chunks (hybrid search)
     3. Rerank results
     4. Check retrieval confidence
-    5. Generate answer with Groq LLM
+    5. Generate answer from retrieved evidence
     6. Build citations
     """
     if not request.query.strip():

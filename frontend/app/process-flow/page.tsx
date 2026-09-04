@@ -92,16 +92,16 @@ const flowSteps = [
     id: "context",
     title: "Context Assembly",
     description:
-      "Top-ranked chunks are assembled with source metadata into a structured context window for the LLM.",
+      "Top-ranked chunks are assembled with source metadata into a structured context window for verified generation.",
     icon: Puzzle,
     color: "text-orange-500",
     bgColor: "bg-orange-500/10",
   },
   {
-    id: "llm",
-    title: "Groq LLM",
+    id: "generation",
+    title: "Context-Verified Generation",
     description:
-      "Context is sent to Groq with a strict prompt that restricts answers to retrieved evidence only. No hallucination allowed.",
+      "Context and query are evaluated with a strict evidence prompt that restricts answers to retrieved manual excerpts only. No unsupported procedures allowed.",
     icon: Cpu,
     color: "text-rose-500",
     bgColor: "bg-rose-500/10",

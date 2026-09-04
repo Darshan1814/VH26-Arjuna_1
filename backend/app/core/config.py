@@ -6,12 +6,18 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """All configuration is loaded from environment variables."""
 
-    # --- Groq LLM ---
-    GROQ_API_KEY: str = ""
-    GROQ_MODEL: str = "llama-3.1-70b-versatile"
+    # --- Generation Model ---
+    AZURE_OPENAI_ENDPOINT: str = ""
+    AZURE_OPENAI_KEY: str = ""
+    AZURE_OPENAI_VERSION: str = "2025-01-01-preview"
+    AZURE_OPENAI_DEPLOYMENT: str = "gpt-5-mini"
+    MODEL_GEN: str = "gpt-5.4"
 
     # --- Supabase ---
     SUPABASE_URL: str = ""
+    SUPABASE_KEY: str = ""
+    SUPABASE_ANON_KEY: str = ""
+    SUPABASE_SERVICE_ROLE_KEY: str = ""
     SUPABASE_SECRET_KEY: str = ""
     SUPABASE_PUBLISHABLE_KEY: str = ""
     DATABASE_URL: str = ""

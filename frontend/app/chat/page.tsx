@@ -41,7 +41,7 @@ export default function ChatPage() {
       {/* Messages area */}
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {messages.length === 0 ? (
-          <EmptyState />
+          <EmptyState onSelectSuggestion={sendMessage} />
         ) : (
           <div className="space-y-4">
             {messages.map((message) => (
@@ -60,7 +60,11 @@ export default function ChatPage() {
   );
 }
 
-function EmptyState() {
+interface EmptyStateProps {
+  onSelectSuggestion: (suggestion: string) => void;
+}
+
+function EmptyState({ onSelectSuggestion }: EmptyStateProps) {
   return (
     <div className="flex h-full flex-col items-center justify-center text-center">
       <div className="rounded-2xl bg-[var(--color-surface)] p-4 mb-4">
@@ -81,22 +85,9 @@ function EmptyState() {
         ].map((suggestion) => (
           <button
             key={suggestion}
+            type="button"
             className="rounded-lg border bg-[var(--color-surface-elevated)] px-4 py-2.5 text-sm text-[var(--color-text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-text)] transition-colors text-left"
-            onClick={() => {
-              // The input component handles sending, but we can pre-fill via DOM
-              const input = document.querySelector<HTMLTextAreaElement>(
-                "[data-chat-input]"
-              );
-              if (input) {
-                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(
-                  window.HTMLTextAreaElement.prototype,
-                  "value"
-                )?.set;
-                nativeInputValueSetter?.call(input, suggestion);
-                input.dispatchEvent(new Event("input", { bubbles: true }));
-                input.focus();
-              }
-            }}
+            onClick={() => onSelectSuggestion(suggestion)}
           >
             &ldquo;{suggestion}&rdquo;
           </button>

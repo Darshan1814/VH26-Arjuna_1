@@ -15,7 +15,7 @@ from app.schemas.rag_response import RAGResponse
 from app.services.retrieval.query_analyzer import QueryAnalyzer
 from app.services.retrieval.hybrid_retriever import HybridRetriever, RetrievedChunk
 from app.services.reranking.reranker import Reranker
-from app.services.llm.groq_client import GroqClient
+from app.services.generation import GenerationService
 from app.services.citations.citation_builder import CitationBuilder
 
 logger = logging.getLogger(__name__)
@@ -33,7 +33,7 @@ class RAGPipeline:
         self.query_analyzer = QueryAnalyzer()
         self.retriever = HybridRetriever()
         self.reranker = Reranker()
-        self.groq_client = GroqClient()
+        self.generation_service = GenerationService()
         self.citation_builder = CitationBuilder()
 
     async def process_query(self, request: RAGQueryRequest) -> RAGResponse:
@@ -79,14 +79,14 @@ class RAGPipeline:
         # Step 6: Enrich chunks with manual/machine names
         enriched_chunks = await self._enrich_chunks(reranked_chunks)
 
-        # Step 7: Generate response with Groq
+        # Step 7: Generate response
         conversation_history = None
         if request.conversation_id:
             conversation_history = await self._get_conversation_history(
                 request.conversation_id
             )
 
-        llm_response = await self.groq_client.generate(
+        gen_response = await self.generation_service.generate(
             query=request.query,
             context_chunks=enriched_chunks,
             conversation_history=conversation_history,
@@ -97,10 +97,10 @@ class RAGPipeline:
 
         # Step 9: Assemble final response
         return RAGResponse(
-            answer=llm_response.get("answer", ""),
-            probable_causes=llm_response.get("probable_causes", []),
-            corrective_steps=llm_response.get("corrective_steps", []),
-            confidence=llm_response.get("confidence", 0.0),
+            answer=gen_response.get("answer", ""),
+            probable_causes=gen_response.get("probable_causes", []),
+            corrective_steps=gen_response.get("corrective_steps", []),
+            confidence=gen_response.get("confidence", 0.0),
             citations=citations,
             detected_error_code=(
                 analysis.error_codes[0] if analysis.error_codes else None
@@ -165,7 +165,7 @@ class RAGPipeline:
         """Check if retrieved evidence is sufficient for generation.
 
         Returns False if we don't have enough relevant chunks,
-        which prevents the LLM from hallucinating an answer.
+        which prevents generating unsupported answers.
         """
         if len(chunks) < MIN_EVIDENCE_CHUNKS:
             return False

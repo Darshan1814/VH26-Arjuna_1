@@ -25,15 +25,11 @@ sentence-transformers==3.3.1
 torch==2.5.1
 transformers==4.47.1
 
-# === LLM ===
-groq==0.15.0
+# === Generation Model ===
+openai>=1.50.0
 
 # === HTTP ===
 httpx==0.28.1
 
 # === Utilities ===
 python-dotenv==1.0.1
-
-# === Testing ===
-pytest==8.3.4
-pytest-asyncio==0.25.0

@@ -5,7 +5,14 @@
  * so we don't need to handle CORS on the client side.
  */
 
-import type { RAGResponse, RAGQueryRequest, Machine, Manual, HealthStatus } from "@/types";
+import type {
+  RAGResponse,
+  RAGQueryRequest,
+  Machine,
+  Manual,
+  HealthStatus,
+  Conversation,
+} from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
 
@@ -82,8 +89,8 @@ export async function queryRAG(request: RAGQueryRequest): Promise<RAGResponse> {
 export async function createConversation(
   machineId?: string,
   title?: string
-): Promise<{ id: string }> {
-  return fetchAPI("/api/conversations", {
+): Promise<Conversation> {
+  return fetchAPI<Conversation>("/api/conversations", {
     method: "POST",
     body: JSON.stringify({ machine_id: machineId, title }),
   });

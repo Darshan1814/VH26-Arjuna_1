@@ -52,7 +52,7 @@ export function MessageBubble({ message }: Props) {
         {rag && !message.isLoading && !message.isError && (
           <div className="space-y-2">
             {/* Ambiguity warning */}
-            {rag.is_ambiguous && rag.ambiguous_machines.length > 0 && (
+            {rag.is_ambiguous && (rag.ambiguous_machines?.length ?? 0) > 0 && (
               <div className="flex flex-wrap gap-1.5">
                 {rag.ambiguous_machines.map((machine) => (
                   <span key={machine} className="badge-warning">
@@ -71,7 +71,7 @@ export function MessageBubble({ message }: Props) {
             )}
 
             {/* Probable causes */}
-            {rag.probable_causes.length > 0 && (
+            {(rag.probable_causes?.length ?? 0) > 0 && (
               <div className="rounded-lg border p-3 text-sm">
                 <p className="text-xs font-medium text-[var(--color-text-muted)] mb-1.5">
                   Probable Causes
@@ -88,7 +88,7 @@ export function MessageBubble({ message }: Props) {
             )}
 
             {/* Corrective steps */}
-            {rag.corrective_steps.length > 0 && (
+            {(rag.corrective_steps?.length ?? 0) > 0 && (
               <div className="rounded-lg border p-3 text-sm">
                 <p className="text-xs font-medium text-[var(--color-text-muted)] mb-1.5">
                   Corrective Steps
@@ -105,7 +105,7 @@ export function MessageBubble({ message }: Props) {
 
             {/* Confidence + Citations row */}
             <div className="flex items-center gap-2 flex-wrap">
-              <ConfidenceBadge confidence={rag.confidence} />
+              <ConfidenceBadge confidence={rag.confidence ?? 0} />
               {rag.detected_error_code && (
                 <span className="badge-info">
                   {rag.detected_error_code}
@@ -119,7 +119,7 @@ export function MessageBubble({ message }: Props) {
             </div>
 
             {/* Citations */}
-            {rag.citations.length > 0 && (
+            {(rag.citations?.length ?? 0) > 0 && (
               <div className="space-y-1">
                 <p className="text-xs font-medium text-[var(--color-text-muted)]">
                   Sources

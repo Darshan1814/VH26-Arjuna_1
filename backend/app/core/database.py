@@ -14,21 +14,26 @@ logger = logging.getLogger(__name__)
 def get_supabase_client() -> Client:
     """Get a cached Supabase client instance.
 
-    Uses the service-role key for full backend access.
+    Uses the service-role key or secret key for backend access.
     This key must NEVER be exposed to the frontend.
     """
-    if not settings.SUPABASE_URL or not settings.SUPABASE_SECRET_KEY:
+    key = (
+        settings.SUPABASE_SERVICE_ROLE_KEY
+        or settings.SUPABASE_SECRET_KEY
+        or settings.SUPABASE_KEY
+    )
+    if not settings.SUPABASE_URL or not key:
         logger.warning(
             "Supabase credentials not configured. "
             "Database operations will fail."
         )
         raise ValueError(
-            "SUPABASE_URL and SUPABASE_SECRET_KEY must be set."
+            "SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY/SUPABASE_SECRET_KEY must be set."
         )
 
     client = create_client(
         settings.SUPABASE_URL,
-        settings.SUPABASE_SECRET_KEY,
+        key,
     )
     logger.info("Supabase client initialized")
     return client

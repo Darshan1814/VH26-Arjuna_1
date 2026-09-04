@@ -45,6 +45,7 @@ export function ChatInput({ onSend, isLoading }: Props) {
         <textarea
           ref={textareaRef}
           data-chat-input
+          aria-label="Describe machine issue or error code"
           value={input}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
