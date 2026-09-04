@@ -23,8 +23,15 @@ import {
   ShieldAlert,
   Binary,
   ArrowRight,
+  Trash2,
 } from "lucide-react";
-import { uploadFlowFiles, executeFlowStep, getFlowSession, restartFlowSession } from "@/lib/api";
+import {
+  uploadFlowFiles,
+  executeFlowStep,
+  getFlowSession,
+  restartFlowSession,
+  removeFlowFile,
+} from "@/lib/api";
 import { useLanguage } from "@/context/language-context";
 
 interface StepInfo {
@@ -73,23 +80,23 @@ const STEPS: StepInfo[] = [
   },
   {
     num: 6,
-    title: "Query Understanding & Intent Analysis",
+    title: "Diagnostic Index & Context Preparation",
     category: "Retrieval",
-    description: "Deconstruct troubleshooting queries into machine models, observed fault symptoms, and diagnostic intent.",
-    icon: MessageSquare,
-  },
-  {
-    num: 7,
-    title: "Hybrid Retrieval, Reranking & Confidence",
-    category: "Retrieval",
-    description: "Execute tri-strategy retrieval (exact + keyword + pgvector) with neural cross-encoder reranking and confidence scoring.",
+    description: "Prepare cross-document search index, inverted vocabulary mappings, and pre-diagnostic context aggregators.",
     icon: Search,
   },
   {
+    num: 7,
+    title: "Evidence Verification & Confidence Calibration",
+    category: "Retrieval",
+    description: "Execute tri-strategy retrieval (exact + keyword + pgvector) with neural cross-encoder reranking and readiness checks.",
+    icon: Layers,
+  },
+  {
     num: 8,
-    title: "Grounded Diagnosis, Solution Ranking & Report",
+    title: "User Query Verification & Grounded Diagnosis",
     category: "Diagnosis",
-    description: "Generate strictly grounded diagnostics with ranked solutions, yellow-highlighted manual crops, and formal PDF/HTML dossiers.",
+    description: "Input technical troubleshooting query, perform strict evidence verification, rank solutions, and generate full PDF/HTML dossier.",
     icon: Sparkles,
   },
 ];
@@ -225,6 +232,25 @@ export default function ProcessFlowPage() {
       setErrorMessage(`Upload failed: ${err.message}`);
     } finally {
       setIsRunning(false);
+    }
+  };
+
+  const [removingFile, setRemovingFile] = useState<string | null>(null);
+
+  const handleRemoveFile = async (filename: string) => {
+    if (isRunning || removingFile) return;
+    setRemovingFile(filename);
+    setErrorMessage(null);
+    try {
+      await removeFlowFile(sessionId, filename);
+      // Invalidate step telemetry so downstream stages recalculate
+      setStepTelemetry({});
+      // Re-run Step 1 with remaining files
+      await runStep(1);
+    } catch (err: any) {
+      setErrorMessage(`Failed to remove ${filename}: ${err.message}`);
+    } finally {
+      setRemovingFile(null);
     }
   };
 
@@ -420,33 +446,34 @@ export default function ProcessFlowPage() {
               </div>
             )}
 
-            {/* Step 6 Query Selection / Input */}
-            {currentStep === 6 && (
+            {/* Step 8 Query Selection / Input & Verification */}
+            {currentStep === 8 && (
               <div className="space-y-3 pt-1">
                 <label className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block">
-                  Diagnostic Query / Observed Issue:
+                  Equipment Troubleshooting Query:
                 </label>
                 <textarea
                   value={queryInput}
                   onChange={(e) => setQueryInput(e.target.value)}
                   className="input-base text-xs w-full resize-none"
                   rows={3}
-                  placeholder="Enter equipment troubleshooting question..."
+                  placeholder="Enter equipment troubleshooting question (e.g. in English or Hindi)..."
                 />
                 <div className="space-y-1">
                   <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">
                     Derived from Manual:
                   </span>
                   {[
-                    "Why is the motor making a chattering noise and not starting on my PhaseMaker Rotary Converter?",
+                    "Why is the motor making a chattering noise on PhaseMaker Rotary Converter?",
                     "How to turn ON the Rotary Converter for RC10 and larger models?",
                     "What size PhaseMaker RC model is required for a 7.5 kW motor?",
                     "How to connect the Soft Starter to U1, V1, W1 on the load motor?",
+                    "PhaseMaker रोटरी कनवर्टर पर 7.5 kW मोटर के लिए कौन सा RC मॉडल चाहिए?",
                   ].map((q, idx) => (
                     <button
                       key={idx}
                       onClick={() => setQueryInput(q)}
-                      className="block text-left text-[11px] text-[var(--color-primary)] hover:underline truncate w-full"
+                      className="block text-left text-[11px] text-[var(--color-primary)] hover:underline truncate w-full cursor-pointer"
                     >
                       • {q}
                     </button>
@@ -457,36 +484,49 @@ export default function ProcessFlowPage() {
 
             {/* Step Control Buttons */}
             <div className="pt-2 flex items-center gap-2">
-              <button
-                onClick={() => runStep(currentStep)}
-                disabled={isRunning}
-                className="btn-secondary text-xs flex-1 py-2 flex items-center justify-center gap-1.5"
-              >
-                {isRunning ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-primary)]" />
-                ) : (
-                  <Play className="h-3.5 w-3.5 fill-current text-[var(--color-primary)]" />
-                )}
-                <span>Re-run Step {currentStep}</span>
-              </button>
+              {currentStep < 8 ? (
+                <>
+                  <button
+                    onClick={() => runStep(currentStep)}
+                    disabled={isRunning}
+                    className="btn-secondary text-xs flex-1 py-2 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    {isRunning ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-primary)]" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5 fill-current text-[var(--color-primary)]" />
+                    )}
+                    <span>Re-run Step {currentStep}</span>
+                  </button>
 
-              <button
-                onClick={handleNext}
-                disabled={isRunning || (currentStep === 8 && isCurrentStepCompleted)}
-                className="btn-primary text-xs flex-1 py-2 flex items-center justify-center gap-1.5"
-              >
-                {currentStep === 8 ? (
-                  <>
-                    <CheckCircle className="h-3.5 w-3.5" />
-                    <span>Pipeline Complete</span>
-                  </>
-                ) : (
-                  <>
+                  <button
+                    onClick={handleNext}
+                    disabled={isRunning}
+                    className="btn-primary text-xs flex-1 py-2 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
                     <span>Next Step</span>
                     <ChevronRight className="h-3.5 w-3.5" />
-                  </>
-                )}
-              </button>
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => runStep(8)}
+                  disabled={isRunning}
+                  className="btn-primary text-xs w-full py-2.5 flex items-center justify-center gap-2 shadow-xs cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                >
+                  {isRunning ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Verifying & Processing Query with OpenAI 5.5...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      <span>Verify & Process Diagnostic Query</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -530,7 +570,7 @@ export default function ProcessFlowPage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
                     <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Total Documents</span>
-                    <p className="text-base font-bold text-[var(--color-text)] mt-0.5">{activeTelemetry.total_files || 1}</p>
+                    <p className="text-base font-bold text-[var(--color-text)] mt-0.5">{activeTelemetry.total_files ?? (activeTelemetry.files?.length ?? 0)}</p>
                   </div>
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
                     <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Detected Language</span>
@@ -556,18 +596,72 @@ export default function ProcessFlowPage() {
                   </div>
                 )}
 
+                {/* Uploaded Documents List with Cancel/Delete Option */}
                 <div>
-                  <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block mb-2">
-                    Ingested Technical Files:
-                  </span>
-                  <div className="space-y-1.5">
-                    {(activeTelemetry.files || []).map((f: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between p-2 rounded border bg-[var(--color-surface-elevated)]">
-                        <span className="font-medium text-[var(--color-text)]">{f.name}</span>
-                        <span className="text-[10px] font-mono text-[var(--color-text-muted)]">{f.size_kb} KB • {f.type}</span>
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block">
+                      Uploaded Equipment Documents ({activeTelemetry.files?.length || 0}):
+                    </span>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-[10px] text-[var(--color-primary)] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Upload className="h-3 w-3" />
+                      <span>+ Upload Another Manual</span>
+                    </button>
                   </div>
+
+                  {(!activeTelemetry.files || activeTelemetry.files.length === 0) ? (
+                    <div className="rounded-lg border border-dashed border-[var(--color-border)] p-6 text-center text-[var(--color-text-muted)] space-y-2 bg-[var(--color-surface-elevated)]">
+                      <p className="font-semibold text-xs text-[var(--color-text)]">
+                        No documents currently uploaded in this session
+                      </p>
+                      <p className="text-[10px]">
+                        Click &ldquo;Upload Service Manual or Schematic&rdquo; on the left or &ldquo;+ Upload Another Manual&rdquo; above.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {activeTelemetry.files.map((f: any, i: number) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between p-3 rounded-lg border bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)]/40 transition shadow-xs group"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="rounded-lg p-2 bg-blue-100 dark:bg-blue-950/60 text-[var(--color-primary)] flex-shrink-0">
+                              <FileText className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-xs text-[var(--color-text)] truncate max-w-xs md:max-w-md" title={f.name}>
+                                {f.name}
+                              </p>
+                              <div className="flex items-center gap-2 text-[10px] text-[var(--color-text-muted)] mt-0.5">
+                                <span className="rounded bg-neutral-200 dark:bg-neutral-800 px-1.5 py-0.2 font-mono font-bold text-[9px]">
+                                  {f.type}
+                                </span>
+                                <span>{f.size_kb} KB</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">• Stored in SQLite</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => handleRemoveFile(f.name)}
+                            disabled={removingFile === f.name || isRunning}
+                            className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border border-transparent hover:border-red-200 dark:hover:border-red-900 transition cursor-pointer disabled:opacity-50 flex-shrink-0"
+                            title={`Cancel and remove ${f.name}`}
+                          >
+                            {removingFile === f.name ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-red-600" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                            <span>Cancel</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -728,31 +822,40 @@ export default function ProcessFlowPage() {
             {!isRunning && currentStep === 6 && activeTelemetry && (
               <div className="space-y-4 text-xs">
                 <div className="rounded-lg border p-4 bg-blue-50/40 dark:bg-blue-950/20 space-y-2">
-                  <span className="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">
-                    Diagnostic Query Under Analysis:
-                  </span>
-                  <p className="text-sm font-bold text-[var(--color-text)]">&ldquo;{activeTelemetry.user_query}&rdquo;</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">
+                      Technical Search Index & Vocabulary Mapping:
+                    </span>
+                    <span className="rounded bg-blue-200 text-blue-900 dark:bg-blue-900 dark:text-blue-200 font-bold px-2 py-0.5 text-[10px]">
+                      {activeTelemetry.retrieval_status || "HNSW + GIN Ready"}
+                    </span>
+                  </div>
+                  <p className="text-sm font-bold text-[var(--color-text)]">
+                    Diagnostic Search Index & Knowledge Preparation
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="rounded-lg border p-3 space-y-1 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Detected Equipment</span>
-                    <p className="font-bold text-[var(--color-text)]">{activeTelemetry.detected_machine}</p>
-                  </div>
-                  <div className="rounded-lg border p-3 space-y-1 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Diagnostic Intent</span>
-                    <p className="font-bold text-[var(--color-text)] capitalize">{activeTelemetry.diagnostic_intent}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block mb-2">
-                    Observed Fault Symptoms:
+                <div className="rounded-lg border p-3 space-y-2 bg-[var(--color-surface-elevated)]">
+                  <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block">
+                    Pre-Diagnostic Indexed Sections:
                   </span>
                   <div className="flex flex-wrap gap-1.5">
-                    {(activeTelemetry.detected_symptoms || []).map((sym: string, i: number) => (
-                      <span key={i} className="rounded-full bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 px-2.5 py-0.5 text-xs font-semibold">
-                        {sym}
+                    {(activeTelemetry.indexed_sections || []).map((sec: string, i: number) => (
+                      <span key={i} className="rounded bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 px-2.5 py-1 text-xs font-semibold">
+                        {sec}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border p-3 space-y-2 bg-[var(--color-surface-elevated)]">
+                  <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block">
+                    Verified Technical Keywords & Error Codes:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(activeTelemetry.technical_tokens || []).map((tok: string, i: number) => (
+                      <span key={i} className="rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 px-2.5 py-0.5 text-xs font-semibold">
+                        {tok}
                       </span>
                     ))}
                   </div>
@@ -815,6 +918,42 @@ export default function ProcessFlowPage() {
                     {finalResult.diagnosis}
                   </p>
                 </div>
+
+                {/* Extracted Specifications & Numbers */}
+                {(finalResult.extracted_specifications || []).length > 0 && (
+                  <div className="rounded-lg border bg-[var(--color-surface-elevated)] p-3 space-y-1.5">
+                    <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block">
+                      Extracted Technical Numbers & Specifications:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {finalResult.extracted_specifications.map((spec: string, idx: number) => (
+                        <span
+                          key={idx}
+                          className="rounded-md bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-mono text-[11px] px-2 py-0.5 font-bold"
+                        >
+                          {spec}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Clarification Prompts If Needed */}
+                {(finalResult.clarification_questions || []).length > 0 && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50/70 dark:bg-amber-950/30 p-3.5 space-y-1.5">
+                    <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 text-amber-600" />
+                      Recommended Clarifying Questions (Fault Narrowing):
+                    </span>
+                    <ul className="list-disc list-inside space-y-1 text-amber-900 dark:text-amber-200 pl-1 text-[11px]">
+                      {finalResult.clarification_questions.map((q: string, idx: number) => (
+                        <li key={idx}>
+                          <span className="font-semibold">{q}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 {/* Ranked Solutions */}
                 <div>

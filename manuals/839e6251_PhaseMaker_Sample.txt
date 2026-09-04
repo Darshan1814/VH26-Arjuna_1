@@ -1,0 +1,2 @@
+Machine Model: PhaseMaker Rotary Converter
+NOTE: If your machine does not turn on or you hear a chattering noise, STOP. Turn the LOAD SWITCH OFF. Rotate the wiring connection of the LOAD plug for one full sequence: Wire in L1 to L2, L2 to L3, and L3 to L1. Restart the Rotary Converter.

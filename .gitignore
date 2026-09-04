@@ -43,6 +43,10 @@ model_cache/
 *~
 
 # === Generated Reports & Evidence ===
+reports/
+*.db
+*.sqlite
+*.sqlite3
 manuals/reports/
 manuals/evidence/
 .trivy-cache/
@@ -54,3 +58,6 @@ manuals/*.pdf
 # === Misc ===
 *.log
 tmp/
+*.tsbuildinfo
+*.chunks.json
+manuals/*.chunks.json

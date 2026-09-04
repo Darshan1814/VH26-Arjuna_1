@@ -1,7 +1,7 @@
 """Signal-based confidence score calculation service."""
 
 import logging
-from typing import Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -26,20 +26,45 @@ class ConfidenceEvaluation:
             "reasons": self.reasons,
         }
 
+    def __getitem__(self, item: str) -> Any:
+        return self.to_dict()[item]
+
 
 class ConfidenceEvaluator:
     """Computes grounding confidence from retrieval and metadata signals."""
 
     @staticmethod
     def evaluate(
-        has_exact_error_match: bool,
-        has_machine_match: bool,
-        top_similarity_score: float,
-        top_rerank_score: float,
-        source_count: int,
-        is_ambiguous: bool,
+        has_exact_error_match: bool = False,
+        has_machine_match: bool = False,
+        top_similarity_score: float = 0.0,
+        top_rerank_score: float = 0.0,
+        source_count: int = 0,
+        is_ambiguous: bool = False,
+        query: Optional[str] = None,
+        retrieved_chunks: Optional[list[Any]] = None,
+        matched_error_code: Optional[bool] = None,
+        **kwargs: Any,
     ) -> ConfidenceEvaluation:
         """Compute score from 0.0 to 1.0 based on structural evidence."""
+        # Adapter for chunks/query callers
+        if matched_error_code is not None:
+            has_exact_error_match = matched_error_code
+        if retrieved_chunks:
+            source_count = max(source_count, len(retrieved_chunks))
+            scores = [
+                c.get("relevance_score", c.get("similarity_score", 0.0))
+                if isinstance(c, dict)
+                else getattr(c, "similarity_score", 0.0)
+                for c in retrieved_chunks
+            ]
+            if scores:
+                max_score = max(scores)
+                top_similarity_score = max(top_similarity_score, max_score)
+                top_rerank_score = max(top_rerank_score, max_score)
+                if any(c.get("machine_model") for c in retrieved_chunks if isinstance(c, dict)) or (max_score >= 0.9 and matched_error_code):
+                    has_machine_match = True
+
         score = 0.0
         reasons = []
 

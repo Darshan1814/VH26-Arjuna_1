@@ -25,12 +25,12 @@ class OpenAIClient:
         if self._client is None:
             if settings.GROQ_API_KEY:
                 self._client = OpenAI(
-                    api_key=settings.GROQ_API_KEY,
                     base_url="https://api.groq.com/openai/v1",
+                    api_key=settings.GROQ_API_KEY,
                 )
                 self._is_groq = True
                 self._is_azure = False
-                logger.info(f"Initialized Groq LLM client (model: {self.model_name})")
+                logger.info(f"Initialized ultra-fast Groq LLM client (model: {self.model_name})")
             elif settings.OPENAI_API_KEY:
                 self._client = OpenAI(api_key=settings.OPENAI_API_KEY)
                 self._is_azure = False
@@ -67,17 +67,17 @@ class OpenAIClient:
         messages: list[dict[str, Any]],
         response_format: Optional[dict[str, str]] = None,
         temperature: float = 0.1,
-        max_tokens: int = 2048,
+        max_tokens: int = 2500,
     ) -> str:
-        """Execute a chat completion with model fallback."""
+        """Execute a chat completion with model fallback, optimized for Groq and OpenAI."""
         if getattr(self, "_is_groq", False) or settings.GROQ_API_KEY:
             candidate_models = [self.model_name]
-            for fallback in ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b", "groq/compound"]:
+            for fallback in ["openai/gpt-oss-120b", "qwen/qwen3.8-27b", "openai/gpt-oss-20b", "groq/compound"]:
                 if fallback not in candidate_models:
                     candidate_models.append(fallback)
         else:
             candidate_models = [self.model_name]
-            for fallback in [settings.MODEL_GEN, settings.AZURE_OPENAI_DEPLOYMENT, "gpt-5.5", "gpt-5-mini", "gpt-5.4", "gpt-4o"]:
+            for fallback in [settings.MODEL_GEN, settings.AZURE_OPENAI_DEPLOYMENT, "gpt-5.5", "gpt-5.4", "gpt-5-mini", "gpt-4o"]:
                 if fallback and fallback not in candidate_models:
                     candidate_models.append(fallback)
 
@@ -90,22 +90,56 @@ class OpenAIClient:
 
         last_err = None
         for model in candidate_models:
+            is_reasoning_or_5 = any(prefix in model.lower() for prefix in ["gpt-5", "o1", "o3", "o4"])
+
             kwargs: dict[str, Any] = {
                 "model": model,
                 "messages": sanitized_messages,
-                "temperature": temperature,
             }
             if response_format:
                 kwargs["response_format"] = response_format
-            if max_tokens:
-                kwargs["max_tokens"] = max_tokens
 
-            try:
-                response = self.client.chat.completions.create(**kwargs)
-                return response.choices[0].message.content or ""
-            except Exception as e:
-                last_err = e
-                logger.warning(f"Chat completion with model '{model}' failed: {e}. Trying fallback...")
+            if is_reasoning_or_5:
+                # gpt-5.5 requires max_completion_tokens (budgeting for reasoning + content)
+                kwargs["max_completion_tokens"] = max(max_tokens or 2500, 2500)
+            else:
+                kwargs["max_tokens"] = max_tokens or 2048
+                kwargs["temperature"] = temperature
+
+            for attempt in range(4):
+                try:
+                    response = self.client.chat.completions.create(**kwargs)
+                    return response.choices[0].message.content or ""
+                except Exception as e:
+                    err_str = str(e).lower()
+                    if "429" in err_str or "rate limit" in err_str:
+                        wait_s = 2.5 * (attempt + 1)
+                        logger.info(f"Groq rate limit notice. Backing off {wait_s}s before retry ({attempt + 1}/4)...")
+                        import time
+                        time.sleep(wait_s)
+                        continue
+
+                    # Dynamic parameter recovery
+                    if "max_tokens" in err_str and "max_completion_tokens" in err_str:
+                        try:
+                            token_val = kwargs.pop("max_tokens", 2500)
+                            kwargs["max_completion_tokens"] = max(token_val, 2500)
+                            kwargs.pop("temperature", None)
+                            response = self.client.chat.completions.create(**kwargs)
+                            return response.choices[0].message.content or ""
+                        except Exception as retry_err:
+                            e = retry_err
+                    elif "temperature" in err_str and "default" in err_str:
+                        try:
+                            kwargs.pop("temperature", None)
+                            response = self.client.chat.completions.create(**kwargs)
+                            return response.choices[0].message.content or ""
+                        except Exception as retry_err:
+                            e = retry_err
+
+                    last_err = e
+                    logger.warning(f"Chat completion with model '{model}' failed: {e}")
+                    break
 
         logger.error(f"All model candidates failed. Last error: {last_err}")
         raise last_err

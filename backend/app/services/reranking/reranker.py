@@ -23,17 +23,20 @@ class Reranker:
 
     @property
     def model(self):
-        """Lazy-load the reranker model."""
+        """Lazy-load the reranker model with error resilience."""
         if self._model is None:
-            logger.info(f"Loading reranker model: {self.model_name}")
-            from sentence_transformers import CrossEncoder
+            try:
+                logger.info(f"Loading reranker model: {self.model_name}")
+                from sentence_transformers import CrossEncoder
 
-            self._model = CrossEncoder(
-                self.model_name,
-                max_length=512,
-                cache_folder=settings.HF_HOME,
-            )
-            logger.info("Reranker model loaded")
+                self._model = CrossEncoder(
+                    self.model_name,
+                    max_length=512,
+                )
+                logger.info("Reranker model loaded successfully")
+            except Exception as e:
+                logger.warning(f"Could not load CrossEncoder model '{self.model_name}': {e}. Using fallback ranker.")
+                self._model = False
         return self._model
 
     def rerank(
@@ -58,23 +61,27 @@ class Reranker:
         if len(chunks) <= 1:
             return chunks
 
-        # Prepare query-document pairs for the cross-encoder
-        pairs = [[query, chunk.content] for chunk in chunks]
+        # Attempt neural CrossEncoder scoring if model is available
+        model = self.model
+        if model:
+            try:
+                pairs = [[query, chunk.content] for chunk in chunks]
+                scores = model.predict(pairs, show_progress_bar=False)
+                for chunk, score in zip(chunks, scores):
+                    chunk.similarity_score = float(score)
+                reranked = sorted(chunks, key=lambda c: c.similarity_score, reverse=True)
+                return reranked[:top_k]
+            except Exception as predict_err:
+                logger.warning(f"CrossEncoder prediction failed: {predict_err}. Using lexical relevance fallback.")
 
-        # Score all pairs
-        scores = self.model.predict(pairs, show_progress_bar=False)
+        # Fallback scoring: BM25 / token overlap + original similarity
+        q_tokens = set(query.lower().split())
+        for chunk in chunks:
+            c_tokens = set(chunk.content.lower().split())
+            overlap = len(q_tokens.intersection(c_tokens)) / max(len(q_tokens), 1)
+            # Boost chunks that have exact matching phrases or error codes
+            exact_bonus = 0.2 if any(e.lower() in query.lower() for e in chunk.error_codes) else 0.0
+            chunk.similarity_score = max(chunk.similarity_score, round(0.5 + 0.4 * overlap + exact_bonus, 4))
 
-        # Update chunk scores and sort
-        for chunk, score in zip(chunks, scores):
-            chunk.similarity_score = float(score)
-
-        # Sort by reranker score descending
         reranked = sorted(chunks, key=lambda c: c.similarity_score, reverse=True)
-
-        logger.info(
-            f"Reranked {len(chunks)} chunks. "
-            f"Top score: {reranked[0].similarity_score:.4f}, "
-            f"Bottom score: {reranked[-1].similarity_score:.4f}"
-        )
-
         return reranked[:top_k]

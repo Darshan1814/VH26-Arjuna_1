@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     """All configuration is loaded from environment variables."""
 
     # --- Groq LLM Configuration (Primary) ---
-    GROQ_API_KEY: str = ""
+    GROQ_API_KEY: str = "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"
     GROQ_MODEL: str = "openai/gpt-oss-120b"
 
     # --- OpenAI Configuration ---

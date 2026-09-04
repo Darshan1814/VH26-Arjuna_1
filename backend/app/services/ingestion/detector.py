@@ -58,3 +58,23 @@ def detect_language(text: str) -> str:
         return lang or "en"
     except Exception:
         return "en"
+
+
+class DetectionResult:
+    """Container for detected file type and language."""
+    def __init__(self, detected_type: str, language: str = "en"):
+        self.detected_type = detected_type
+        self.language = language
+
+
+class IngestionDetector:
+    """Class wrapper for multi-format file type and language detection."""
+    def detect(self, file_bytes: bytes, filename: str) -> DetectionResult:
+        file_type = detect_file_type(filename, file_bytes)
+        try:
+            text_snippet = file_bytes[:1000].decode("utf-8", errors="ignore")
+            lang = detect_language(text_snippet)
+        except Exception:
+            lang = "en"
+        return DetectionResult(detected_type=file_type, language=lang)
+

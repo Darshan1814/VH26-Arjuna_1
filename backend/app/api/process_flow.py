@@ -84,6 +84,41 @@ async def get_session(session_id: str):
     }
 
 
+@router.delete("/{session_id}/files/{filename:path}")
+async def remove_session_file(session_id: str, filename: str):
+    """Cancel and remove an uploaded document from the diagnostic session."""
+    flow_mgr = get_flow_manager()
+    success = flow_mgr.remove_file(session_id, filename)
+    session = flow_mgr.get_or_create_session(session_id)
+    return {
+        "status": "success",
+        "removed": filename,
+        "success": success,
+        "remaining_files": [{"name": f["name"], "size": f["size"]} for f in session.files],
+        "total_files": len(session.files),
+    }
+
+
+@router.get("/{session_id}/files")
+async def list_session_files(session_id: str):
+    """Get all uploaded documents in the session."""
+    flow_mgr = get_flow_manager()
+    session = flow_mgr.get_or_create_session(session_id)
+    return {
+        "session_id": session_id,
+        "total_files": len(session.files),
+        "files": [
+            {
+                "name": f["name"],
+                "size": f["size"],
+                "size_kb": round(f["size"] / 1024, 1),
+                "type": f["name"].split(".")[-1].upper(),
+            }
+            for f in session.files
+        ],
+    }
+
+
 @router.post("/{session_id}/restart")
 async def restart_session(session_id: str):
     """Restart a workflow session back to step 1."""

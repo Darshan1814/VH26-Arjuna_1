@@ -35,6 +35,7 @@ export default function ChatPage() {
     "How to connect the Soft Starter to U1, V1, W1 on the load motor?",
     "What should I do if the Idler motor does not run after 4-5 seconds of pressing START?",
   ]);
+  const [hasUploaded, setHasUploaded] = useState<boolean>(false);
   const [activeManualTitle, setActiveManualTitle] = useState<string>(
     "PhaseMaker Rotary Converter Manual"
   );
@@ -73,6 +74,7 @@ export default function ChatPage() {
       setUploadStatus(
         `Successfully ingested ${res.files_processed} file(s) (${res.total_chunks_stored} chunks indexed). Refreshing diagnostic suggestions...`
       );
+      setHasUploaded(true);
       // Reload suggestions tailored to the newly uploaded document
       await loadSuggestions();
       setTimeout(() => setUploadStatus(null), 6000);
@@ -126,8 +128,27 @@ export default function ChatPage() {
             <Wrench className="h-4 w-4 text-[var(--color-primary)]" />
             {t("Industrial Diagnostic Assistant")}
           </h1>
-          <p className="text-xs text-[var(--color-text-muted)]">
-            {t("Active Knowledge Base")}: <span className="font-medium text-[var(--color-text)]">{activeManualTitle}</span>
+          <p className="text-xs text-[var(--color-text-muted)] flex items-center gap-2">
+            <span>
+              {t("Active Knowledge Base")}:{" "}
+              <span className="font-medium text-[var(--color-text)]">
+                {hasUploaded ? activeManualTitle : t("None (Upload document to begin)")}
+              </span>
+            </span>
+            {hasUploaded && (
+              <button
+                onClick={() => {
+                  setHasUploaded(false);
+                  setActiveManualTitle("");
+                  setUploadStatus("Active document cancelled. Please upload a new manual.");
+                  setTimeout(() => setUploadStatus(null), 4000);
+                }}
+                className="text-[10px] text-red-600 dark:text-red-400 hover:underline font-semibold cursor-pointer"
+                title="Cancel and remove active manual"
+              >
+                ({t("Cancel / Change")})
+              </button>
+            )}
           </p>
         </div>
 
@@ -182,10 +203,15 @@ export default function ChatPage() {
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {messages.length === 0 ? (
           <EmptyState
+            hasUploaded={hasUploaded}
             activeManual={activeManualTitle}
             suggestions={suggestions}
             onSelectSuggestion={sendMessage}
             onOpenUpload={() => fileInputRef.current?.click()}
+            onLoadDefaultManual={() => {
+              setHasUploaded(true);
+              loadSuggestions();
+            }}
           />
         ) : (
           <div className="space-y-4">
@@ -210,19 +236,61 @@ export default function ChatPage() {
 }
 
 interface EmptyStateProps {
+  hasUploaded: boolean;
   activeManual: string;
   suggestions: string[];
   onSelectSuggestion: (suggestion: string) => void;
   onOpenUpload: () => void;
+  onLoadDefaultManual: () => void;
 }
 
 function EmptyState({
+  hasUploaded,
   activeManual,
   suggestions,
   onSelectSuggestion,
   onOpenUpload,
+  onLoadDefaultManual,
 }: EmptyStateProps) {
   const { t } = useLanguage();
+
+  if (!hasUploaded) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center text-center px-4 max-w-md mx-auto">
+        <div className="rounded-2xl bg-[var(--color-surface-elevated)] border p-5 mb-4 shadow-sm">
+          <UploadCloud className="h-10 w-10 text-[var(--color-primary)]" />
+        </div>
+        <h2 className="text-lg font-bold text-[var(--color-text)] mb-2">
+          {t("Upload Equipment Documentation")}
+        </h2>
+        <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed mb-6">
+          {t("Upload an OEM manual, circuit diagram, or error log (PDF, PNG, CSV). Grounded diagnostic suggestions will be dynamically generated once indexed.")}
+        </p>
+
+        <div className="w-full space-y-3">
+          <button
+            onClick={onOpenUpload}
+            className="btn-primary w-full py-2.5 text-xs flex items-center justify-center gap-2 shadow-xs cursor-pointer"
+          >
+            <UploadCloud className="h-4 w-4" />
+            <span>{t("Select & Upload Manual")}</span>
+          </button>
+
+          <button
+            onClick={onLoadDefaultManual}
+            className="btn-secondary w-full py-2 text-xs flex items-center justify-center gap-1.5 cursor-pointer text-[var(--color-text-secondary)]"
+          >
+            <BookOpen className="h-3.5 w-3.5 text-[var(--color-primary)]" />
+            <span>{t("Use Ingested PhaseMaker RC Manual")}</span>
+          </button>
+        </div>
+
+        <p className="text-[10px] text-[var(--color-text-muted)] mt-5">
+          {t("Supports: PDF, DOCX, PNG, JPG, CSV, LOG, TXT with multilingual extraction.")}
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full flex-col items-center justify-center text-center px-4">
@@ -232,7 +300,7 @@ function EmptyState({
       <h2 className="text-lg font-bold text-[var(--color-text)] mb-1">
         {t("Industrial Machine Troubleshooting")}
       </h2>
-      <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 px-3 py-1 text-xs text-blue-700 dark:text-blue-300 mb-5">
+      <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 px-3 py-1 text-xs text-emerald-700 dark:text-emerald-300 mb-5">
         <BookOpen className="h-3.5 w-3.5" />
         <span>{t("Grounded on")}: <strong>{activeManual}</strong></span>
       </div>
@@ -247,7 +315,7 @@ function EmptyState({
           <button
             key={idx}
             type="button"
-            className="rounded-lg border bg-[var(--color-surface)] px-4 py-2.5 text-xs text-[var(--color-text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-text)] transition-colors text-left shadow-xs flex items-center justify-between group"
+            className="rounded-lg border bg-[var(--color-surface)] px-4 py-2.5 text-xs text-[var(--color-text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-text)] transition-colors text-left shadow-xs flex items-center justify-between group cursor-pointer"
             onClick={() => onSelectSuggestion(suggestion)}
           >
             <span>&ldquo;{t(suggestion)}&rdquo;</span>

@@ -16,24 +16,40 @@ import type {
   ReportMeta,
 } from "@/types";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
+const getApiBase = (): string => {
+  if (process.env.NEXT_PUBLIC_API_URL) {
+    return process.env.NEXT_PUBLIC_API_URL;
+  }
+  if (typeof window !== "undefined") {
+    // In browser, communicate directly with backend port to avoid Next.js 30s proxy timeouts
+    return "http://localhost:8000";
+  }
+  return process.env.BACKEND_URL || "http://backend:8000";
+};
+
+const API_BASE = getApiBase();
 
 async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
   const url = `${API_BASE}${path}`;
-  const res = await fetch(url, {
-    headers: {
-      "Content-Type": "application/json",
-      ...options?.headers,
-    },
-    ...options,
-  });
+  try {
+    const res = await fetch(url, {
+      headers: {
+        "Content-Type": "application/json",
+        ...options?.headers,
+      },
+      ...options,
+    });
 
-  if (!res.ok) {
-    const error = await res.text().catch(() => "Unknown error");
-    throw new Error(`API Error (${res.status}): ${error}`);
+    if (!res.ok) {
+      const error = await res.text().catch(() => "Unknown error");
+      throw new Error(`API Error (${res.status}): ${error}`);
+    }
+
+    return res.json();
+  } catch (err: any) {
+    console.error(`Fetch error for ${url}:`, err);
+    throw err;
   }
-
-  return res.json();
 }
 
 // === Health ===
@@ -163,6 +179,21 @@ export async function restartFlowSession(
   return fetchAPI(`/api/process-flow/${sessionId}/restart`, {
     method: "POST",
   });
+}
+
+export async function removeFlowFile(
+  sessionId: string,
+  filename: string
+): Promise<{ status: string; removed: string; total_files: number }> {
+  return fetchAPI(`/api/process-flow/${sessionId}/files/${encodeURIComponent(filename)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getFlowSessionFiles(
+  sessionId: string
+): Promise<{ session_id: string; total_files: number; files: any[] }> {
+  return fetchAPI(`/api/process-flow/${sessionId}/files`);
 }
 
 // === Reports ===

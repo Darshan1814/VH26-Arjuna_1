@@ -8,8 +8,6 @@ import json
 import logging
 from typing import Optional
 
-from openai import AzureOpenAI
-
 from app.core.config import settings
 from app.services.retrieval.hybrid_retriever import RetrievedChunk
 
@@ -94,7 +92,7 @@ from app.services.llm.openai_client import get_openai_client
 
 
 class GenerationService:
-    """Generate troubleshooting answers using configured generation model."""
+    """Generate troubleshooting answers using Groq / configured generation model."""
 
     def __init__(self) -> None:
         self._llm_client = get_openai_client()
@@ -132,14 +130,14 @@ class GenerationService:
         try:
             parsed = self._llm_client.json_completion(messages=messages)
             logger.info(
-                f"Response generated successfully. "
+                f"Groq ({settings.GROQ_MODEL}) response generated successfully. "
                 f"Confidence: {parsed.get('confidence', 'N/A')}"
             )
             return parsed
         except Exception as e:
-            logger.error(f"Generation API call failed: {e}")
+            logger.error(f"Generation API call failed: {e}", exc_info=True)
             return {
-                "answer": "Failed to format response.",
+                "answer": f"Diagnostic reasoning encounter: {str(e)}",
                 "probable_causes": [],
                 "corrective_steps": [],
                 "confidence": 0.0,
