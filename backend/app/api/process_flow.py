@@ -46,9 +46,8 @@ async def execute_step(
     step_num: int,
     body: Optional[StepExecutionRequest] = None,
 ):
-    """Execute a single step (1-16) within the specified process flow session."""
-    if step_num < 1 or step_num > 16:
-        raise HTTPException(status_code=400, detail="Step number must be between 1 and 16")
+    if step_num < 1 or step_num > 8:
+        raise HTTPException(status_code=400, detail="Step number must be between 1 and 8")
 
     flow_mgr = get_flow_manager()
     input_data = body.user_input if body and body.user_input else {}

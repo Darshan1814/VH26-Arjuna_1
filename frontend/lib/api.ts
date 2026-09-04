@@ -55,6 +55,10 @@ export async function getManuals(machineId?: string): Promise<Manual[]> {
   return fetchAPI<Manual[]>(`/api/manuals${query}`);
 }
 
+export async function getManualSuggestions(): Promise<{ status: string; suggestions: string[]; active_manual?: string }> {
+  return fetchAPI<{ status: string; suggestions: string[]; active_manual?: string }>("/api/manuals/suggestions");
+}
+
 export async function uploadManual(
   file: File,
   machineId: string,

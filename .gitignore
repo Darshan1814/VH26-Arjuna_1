@@ -41,8 +41,12 @@ model_cache/
 *.swp
 *.swo
 *~
-.DS_Store
-Thumbs.db
+
+# === Generated Reports & Evidence ===
+manuals/reports/
+manuals/evidence/
+.trivy-cache/
+coverage/
 
 # === Manuals (user-uploaded) ===
 manuals/*.pdf

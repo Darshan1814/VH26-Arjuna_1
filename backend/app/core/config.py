@@ -9,7 +9,7 @@ class Settings(BaseSettings):
 
     # --- OpenAI Configuration ---
     OPENAI_API_KEY: str = ""
-    OPENAI_MODEL: str = "gpt-4o"
+    OPENAI_MODEL: str = "gpt-5.5"
     OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
     EMBEDDING_PROVIDER: str = "local"  # "local" (BAAI/bge-m3) or "openai"
 
@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     AZURE_OPENAI_ENDPOINT: str = ""
     AZURE_OPENAI_KEY: str = ""
     AZURE_OPENAI_VERSION: str = "2025-01-01-preview"
-    AZURE_OPENAI_DEPLOYMENT: str = "gpt-5-mini"
-    MODEL_GEN: str = "gpt-5.4"
+    AZURE_OPENAI_DEPLOYMENT: str = "gpt-5.5"
+    MODEL_GEN: str = "gpt-5.5"
 
     # --- Supabase ---
     SUPABASE_URL: str = ""

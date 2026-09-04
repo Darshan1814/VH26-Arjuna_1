@@ -4,15 +4,15 @@ import { useRef, useEffect, useState } from "react";
 import { useChat } from "@/hooks/use-chat";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { ChatInput } from "@/components/chat/chat-input";
-import { uploadKnowledgeFiles } from "@/lib/api";
+import { uploadKnowledgeFiles, getManualSuggestions } from "@/lib/api";
 import {
   Wrench,
   Trash2,
   UploadCloud,
   FileCheck,
   Loader2,
-  AlertCircle,
-  HelpCircle,
+  BookOpen,
+  Sparkles,
 } from "lucide-react";
 
 export default function ChatPage() {
@@ -24,6 +24,36 @@ export default function ChatPage() {
   const [uploadStatus, setUploadStatus] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
+  // Dynamic suggestions derived from the actual uploaded manual
+  const [suggestions, setSuggestions] = useState<string[]>([
+    "Why is the load motor making a chattering noise on PhaseMaker Rotary Converter?",
+    "How to turn ON the Rotary Converter for RC10 and larger models?",
+    "What size PhaseMaker RC model is required for a 7.5 kW motor?",
+    "How to connect the Soft Starter to U1, V1, W1 on the load motor?",
+    "What should I do if the Idler motor does not run after 4-5 seconds of pressing START?",
+  ]);
+  const [activeManualTitle, setActiveManualTitle] = useState<string>(
+    "PhaseMaker Rotary Converter Manual"
+  );
+
+  const loadSuggestions = async () => {
+    try {
+      const res = await getManualSuggestions();
+      if (res.suggestions && res.suggestions.length > 0) {
+        setSuggestions(res.suggestions);
+      }
+      if (res.active_manual) {
+        setActiveManualTitle(res.active_manual);
+      }
+    } catch (err) {
+      console.warn("Could not load dynamic suggestions, using verified defaults:", err);
+    }
+  };
+
+  useEffect(() => {
+    loadSuggestions();
+  }, []);
+
   // Auto-scroll to bottom on new messages
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -32,14 +62,16 @@ export default function ChatPage() {
   const handleFileUpload = async (files: FileList | null) => {
     if (!files || files.length === 0) return;
     setUploading(true);
-    setUploadStatus("Uploading & processing technical knowledge...");
+    setUploadStatus("Uploading & scanning technical documentation in the background...");
 
     try {
       const fileList = Array.from(files);
       const res = await uploadKnowledgeFiles(fileList);
       setUploadStatus(
-        `Successfully ingested ${res.files_processed} file(s) (${res.total_chunks_stored} chunks indexed).`
+        `Successfully ingested ${res.files_processed} file(s) (${res.total_chunks_stored} chunks indexed). Refreshing diagnostic suggestions...`
       );
+      // Reload suggestions tailored to the newly uploaded document
+      await loadSuggestions();
       setTimeout(() => setUploadStatus(null), 6000);
     } catch (err: any) {
       setUploadStatus(`Upload failed: ${err.message || "Unknown error"}`);
@@ -92,7 +124,7 @@ export default function ChatPage() {
             Industrial Diagnostic Assistant
           </h1>
           <p className="text-xs text-[var(--color-text-muted)]">
-            Multi-manual grounded troubleshooting with evidence highlighting
+            Active Knowledge Base: <span className="font-medium text-[var(--color-text)]">{activeManualTitle}</span>
           </p>
         </div>
 
@@ -109,7 +141,7 @@ export default function ChatPage() {
             ) : (
               <UploadCloud className="h-3.5 w-3.5" />
             )}
-            <span>Add Knowledge</span>
+            <span>Upload Manual</span>
           </button>
 
           {messages.length > 0 && (
@@ -147,6 +179,8 @@ export default function ChatPage() {
       <div className="flex-1 overflow-y-auto px-4 py-4">
         {messages.length === 0 ? (
           <EmptyState
+            activeManual={activeManualTitle}
+            suggestions={suggestions}
             onSelectSuggestion={sendMessage}
             onOpenUpload={() => fileInputRef.current?.click()}
           />
@@ -173,44 +207,46 @@ export default function ChatPage() {
 }
 
 interface EmptyStateProps {
+  activeManual: string;
+  suggestions: string[];
   onSelectSuggestion: (suggestion: string) => void;
   onOpenUpload: () => void;
 }
 
-function EmptyState({ onSelectSuggestion, onOpenUpload }: EmptyStateProps) {
+function EmptyState({
+  activeManual,
+  suggestions,
+  onSelectSuggestion,
+  onOpenUpload,
+}: EmptyStateProps) {
   return (
     <div className="flex h-full flex-col items-center justify-center text-center px-4">
-      <div className="rounded-2xl bg-[var(--color-surface-elevated)] border p-4 mb-4 shadow-sm">
+      <div className="rounded-2xl bg-[var(--color-surface-elevated)] border p-4 mb-3 shadow-sm">
         <Wrench className="h-8 w-8 text-[var(--color-primary)]" />
       </div>
       <h2 className="text-lg font-bold text-[var(--color-text)] mb-1">
         Industrial Machine Troubleshooting
       </h2>
-      <p className="max-w-md text-xs text-[var(--color-text-muted)] mb-6 leading-relaxed">
-        Grounded diagnostic assistant backed by OEM manuals, wiring schematics, and error logs.
-        Every recommendation is verified against source documents with page citations.
-      </p>
+      <div className="inline-flex items-center gap-1.5 rounded-full bg-blue-50 dark:bg-blue-950/50 border border-blue-200 dark:border-blue-800 px-3 py-1 text-xs text-blue-700 dark:text-blue-300 mb-5">
+        <BookOpen className="h-3.5 w-3.5" />
+        <span>Grounded on: <strong>{activeManual}</strong></span>
+      </div>
 
-      {/* Sample query pills */}
-      <div className="grid gap-2 text-left w-full max-w-md">
+      {/* Diagnostic Suggestions Derived from Real Manual */}
+      <div className="grid gap-2 text-left w-full max-w-lg">
         <div className="text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider mb-1 flex items-center gap-1">
-          <HelpCircle className="h-3 w-3" />
-          Test Diagnostic Scenarios
+          <Sparkles className="h-3.5 w-3.5 text-[var(--color-primary)]" />
+          Verified Diagnostic Questions from Manual
         </div>
-        {[
-          "Error E101 on CNC-X100: Spindle motor thermal trip",
-          "What does error code E101 mean?",
-          "Hydraulic pressure loss with abnormal vibration on PRESS-Z200",
-          "What is error E999 on unknown machine?",
-        ].map((suggestion) => (
+        {suggestions.map((suggestion, idx) => (
           <button
-            key={suggestion}
+            key={idx}
             type="button"
             className="rounded-lg border bg-[var(--color-surface)] px-4 py-2.5 text-xs text-[var(--color-text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-text)] transition-colors text-left shadow-xs flex items-center justify-between group"
             onClick={() => onSelectSuggestion(suggestion)}
           >
             <span>&ldquo;{suggestion}&rdquo;</span>
-            <span className="text-[10px] text-[var(--color-primary)] opacity-0 group-hover:opacity-100 transition">
+            <span className="text-[10px] font-semibold text-[var(--color-primary)] opacity-0 group-hover:opacity-100 transition whitespace-nowrap ml-2">
               Run →
             </span>
           </button>
@@ -222,7 +258,7 @@ function EmptyState({ onSelectSuggestion, onOpenUpload }: EmptyStateProps) {
           onClick={onOpenUpload}
           className="text-xs text-[var(--color-primary)] underline hover:text-[var(--color-primary-hover)] cursor-pointer"
         >
-          Or upload new service manuals (PDF, DOCX, Images, CSV, Logs)
+          Upload additional OEM manuals, circuit diagrams, or error logs
         </button>
       </div>
     </div>

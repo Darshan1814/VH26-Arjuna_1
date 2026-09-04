@@ -46,8 +46,8 @@ class OpenAIClient:
     def model_name(self) -> str:
         """Returns the configured model name / deployment."""
         if self._is_azure:
-            return settings.AZURE_OPENAI_DEPLOYMENT or settings.MODEL_GEN or "gpt-4o"
-        return settings.OPENAI_MODEL or "gpt-4o"
+            return settings.MODEL_GEN or settings.AZURE_OPENAI_DEPLOYMENT or "gpt-5.5"
+        return settings.OPENAI_MODEL or "gpt-5.5"
 
     def chat_completion(
         self,
@@ -56,19 +56,33 @@ class OpenAIClient:
         temperature: float = 0.1,
         max_tokens: int = 2048,
     ) -> str:
-        """Execute a chat completion."""
-        kwargs: dict[str, Any] = {
-            "model": self.model_name,
-            "messages": messages,
-            "temperature": temperature,
-        }
-        if response_format:
-            kwargs["response_format"] = response_format
-        if max_tokens:
-            kwargs["max_tokens"] = max_tokens
+        """Execute a chat completion with model fallback."""
+        candidate_models = [self.model_name]
+        for fallback in [settings.MODEL_GEN, settings.AZURE_OPENAI_DEPLOYMENT, "gpt-5.5", "gpt-5-mini", "gpt-5.4", "gpt-4o"]:
+            if fallback and fallback not in candidate_models:
+                candidate_models.append(fallback)
 
-        response = self.client.chat.completions.create(**kwargs)
-        return response.choices[0].message.content or ""
+        last_err = None
+        for model in candidate_models:
+            kwargs: dict[str, Any] = {
+                "model": model,
+                "messages": messages,
+                "temperature": temperature,
+            }
+            if response_format:
+                kwargs["response_format"] = response_format
+            if max_tokens:
+                kwargs["max_tokens"] = max_tokens
+
+            try:
+                response = self.client.chat.completions.create(**kwargs)
+                return response.choices[0].message.content or ""
+            except Exception as e:
+                last_err = e
+                logger.warning(f"Chat completion with model '{model}' failed: {e}. Trying fallback...")
+
+        logger.error(f"All model candidates failed. Last error: {last_err}")
+        raise last_err
 
     def json_completion(
         self,
