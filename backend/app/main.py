@@ -21,7 +21,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("Starting Machine Troubleshooter API")
     logger.info(f"Embedding model: {settings.EMBEDDING_MODEL}")
     logger.info(f"Reranker model: {settings.RERANKER_MODEL}")
-    logger.info(f"Generation model: {settings.AZURE_OPENAI_DEPLOYMENT or settings.MODEL_GEN}")
+    logger.info(f"Generation model: {settings.GROQ_MODEL} (Groq Inference Engine)")
 
     # Models are loaded lazily on first use to keep startup fast
     yield

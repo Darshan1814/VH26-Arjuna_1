@@ -1,0 +1,18 @@
+MANUAL: Press-Z200 Heavy Hydraulic Stamping Press Manual
+EQUIPMENT: Press-Z200
+MODEL: Z200
+SECTION: Hydraulic Subsystem Troubleshooting
+PAGE: 108
+
+ERROR CODE E101: Hydraulic Circuit Pressure Low.
+SYMPTOM: Main system manifold pressure drops below 140 bar during ram descent.
+PROBABLE CAUSES:
+1. Hydraulic fluid level in main 500L reservoir below minimum sight glass
+2. Proportional pressure relief valve solenoid sticking or burned out
+3. Main variable displacement hydraulic pump suction strainer clogged
+
+CORRECTIVE ACTION:
+1. Emergency stop hydraulic power unit (HPU) immediately.
+2. Inspect hydraulic fluid reservoir level and top off with ISO VG 46 oil.
+3. Check proportional relief valve coil resistance (nominal 24 Ohms).
+4. Service suction line strainer and bleed trapped air from manifold block.

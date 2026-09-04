@@ -569,7 +569,7 @@ export default function ProcessFlowPage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
                     <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Total Documents</span>
-                    <p className="text-base font-bold text-[var(--color-text)] mt-0.5">{activeTelemetry.total_files || 1}</p>
+                    <p className="text-base font-bold text-[var(--color-text)] mt-0.5">{activeTelemetry.total_files ?? (activeTelemetry.files?.length ?? 0)}</p>
                   </div>
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
                     <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Detected Language</span>

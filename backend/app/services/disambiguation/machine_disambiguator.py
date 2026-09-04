@@ -77,3 +77,20 @@ class MachineDisambiguator:
             candidate_machines=list(matched_machines),
             error_code=detected_error_codes[0] if detected_error_codes else None,
         )
+
+    def evaluate(
+        self,
+        query: str,
+        detected_error_code: Optional[str] = None,
+        detected_machine: Optional[str] = None,
+        candidate_chunks: Optional[list[dict[str, Any]]] = None,
+    ) -> DisambiguationResult:
+        """Helper evaluate interface matching multi-agent caller patterns."""
+        error_codes = [detected_error_code] if detected_error_code else []
+        chunks = candidate_chunks or []
+        return self.check_ambiguity(
+            detected_error_codes=error_codes,
+            explicit_machine=detected_machine,
+            retrieved_chunks=chunks,
+        )
+

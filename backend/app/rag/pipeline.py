@@ -1,6 +1,7 @@
 """Orchestrates the complete industrial RAG troubleshooting pipeline."""
 
 import os
+import uuid
 import logging
 from typing import Any, Optional
 
@@ -17,6 +18,9 @@ from app.services.retrieval.confidence_evaluator import ConfidenceEvaluator
 from app.services.reranking.reranker import Reranker
 from app.services.disambiguation.machine_disambiguator import MachineDisambiguator
 from app.services.citations.evidence_highlighter import EvidenceHighlighter
+from app.services.reports.pdf_generator import PDFReportGenerator
+from app.services.reports.html_generator import HTMLReportGenerator
+from app.core.sqlite_storage import get_sqlite_storage
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +210,13 @@ class RAGPipeline:
                     "caption": f"{manual_name} — Page {page_num}",
                 })
 
+            meta_d = chunk.metadata if isinstance(chunk.metadata, dict) else {}
+            if isinstance(chunk.metadata, str):
+                try:
+                    meta_d = json.loads(chunk.metadata)
+                except Exception:
+                    meta_d = {}
+
             citations.append(
                 Citation(
                     manual=manual_name,
@@ -214,8 +225,8 @@ class RAGPipeline:
                     page=page_num,
                     chunk_id=chunk.id,
                     relevance_score=chunk.similarity_score,
-                    source_type=chunk.metadata.get("source_type", "pdf"),
-                    file_name=chunk.metadata.get("file_name"),
+                    source_type=meta_d.get("source_type", "pdf"),
+                    file_name=meta_d.get("file_name") or manual_name,
                     evidence_image_url=img_url,
                 )
             )
@@ -224,6 +235,58 @@ class RAGPipeline:
         answer_text = gen_output.get("diagnosis", "")
         if gen_output.get("probable_causes"):
             answer_text += "\n\n**Probable Causes:**\n" + "\n".join(f"- {c}" for c in gen_output["probable_causes"])
+
+        # Auto-generate formal PDF & HTML diagnostic audit reports
+        report_id = str(uuid.uuid4())[:8].upper()
+        report_pdf_url = None
+        report_html_url = None
+
+        report_payload = {
+            "report_id": report_id,
+            "query": query,
+            "machine_model": target_machine or "PhaseMaker Rotary Converter",
+            "error_code": detected_errors[0] if detected_errors else "CHATTERING_NOISE",
+            "problem": gen_output.get("problem") or query,
+            "diagnosis": gen_output.get("diagnosis", ""),
+            "probable_causes": gen_output.get("probable_causes", []),
+            "recommended_solutions": [
+                {
+                    "priority": s.priority,
+                    "action": s.action,
+                    "reason": s.reason,
+                    "evidence_strength": s.evidence_strength,
+                    "source": s.source,
+                }
+                for s in solution_objs
+            ],
+            "safety_warnings": gen_output.get("safety_warnings", []),
+            "confidence_level": confidence_eval.level,
+            "confidence": confidence_eval.score,
+            "citations": [
+                {
+                    "manual": c.manual,
+                    "page": c.page,
+                    "section": c.section,
+                    "relevance_score": c.relevance_score,
+                }
+                for c in citations
+            ],
+            "evidence_images": evidence_images,
+        }
+
+        try:
+            pdf_bytes = PDFReportGenerator.generate_bytes(report_payload)
+            html_content = HTMLReportGenerator.generate(report_payload)
+            get_sqlite_storage().save_report(
+                report_data=report_payload,
+                pdf_bytes=pdf_bytes,
+                html_content=html_content,
+            )
+            report_pdf_url = f"/api/reports/{report_id}/pdf"
+            report_html_url = f"/api/reports/{report_id}/html"
+            logger.info(f"Auto-generated diagnostic report: {report_id}")
+        except Exception as rep_err:
+            logger.warning(f"Report generation skipped in RAG pipeline: {rep_err}")
 
         return RAGResponse(
             problem=gen_output.get("problem") or query,
@@ -244,6 +307,9 @@ class RAGPipeline:
             detected_machine=target_machine,
             query_type=analysis_dict.get("intent", "troubleshoot"),
             conversation_id=request.conversation_id,
+            report_id=report_id,
+            report_pdf_url=report_pdf_url,
+            report_html_url=report_html_url,
         )
 
     @staticmethod

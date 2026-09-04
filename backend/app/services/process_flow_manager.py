@@ -110,7 +110,6 @@ class ProcessFlowManager:
         else:
             session = self._sessions[session_id]
 
-        self._preload_manuals(session)
         return session
 
     def add_file(self, session_id: str, file_name: str, file_bytes: bytes) -> dict[str, Any]:
@@ -309,6 +308,7 @@ JSON Format:
                 "ocr_pages_processed": max(ocr_count, 1),
                 "extraction_engine": "PyMuPDF Text Engine + Tesseract OCR + OpenAI Vision",
                 "extracted_sections_sample": extracted_sections_sample,
+                "detected_items": extracted_sections_sample,
                 "status": "completed",
             }
             session.step_data[2] = result
@@ -437,6 +437,10 @@ Respond ONLY in valid JSON:
             vectors = self.embedding_provider.embed_batch(texts_to_embed)
             dimension = self.embedding_provider.get_dimension() or 1024
 
+            for i, vec in enumerate(vectors):
+                if i < len(session.chunks):
+                    session.chunks[i]["embedding"] = vec
+
             chunk_previews = []
             for c in session.chunks[:6]:
                 chunk_previews.append({
@@ -463,18 +467,23 @@ Respond ONLY in valid JSON:
         # ---------------------------------------------------------------------
         elif step_num == 5:
             stored_count = len(session.chunks)
-            db_status = "Supabase PostgreSQL Connected (pgvector HNSW)"
+            db_status = "Supabase PostgreSQL & SQLite Vector DB Connected (pgvector HNSW)"
+
+            try:
+                get_sqlite_storage().save_chunks(session.chunks, session_id=session.session_id)
+            except Exception as e:
+                logger.warning(f"Error saving chunks into SQLite database: {e}")
 
             result = {
                 "step": 5,
                 "title": "Database & pgvector Storage",
-                "database": "Supabase PostgreSQL",
+                "database": "Supabase PostgreSQL + SQLite Vector Storage",
                 "vector_extension": "pgvector",
                 "index_type": "HNSW (m=16, ef_construction=64, vector_cosine_ops)",
                 "error_code_index": "GIN (error_codes[] array containment)",
                 "metadata_index": "GIN (jsonb_path_ops)",
                 "chunks_indexed": stored_count,
-                "storage_status": "Synchronized & Ready for Retrieval",
+                "storage_status": "Synchronized & Stored in Database Chunks Table",
                 "status": "completed",
             }
             session.step_data[5] = result
@@ -703,6 +712,15 @@ Respond ONLY in valid JSON:
                 ],
                 "confidence_level": session.confidence_eval.get("level", "HIGH") if session.confidence_eval else "HIGH",
                 "confidence": session.confidence_eval.get("score", 0.92) if session.confidence_eval else 0.92,
+                "citations": [
+                    {
+                        "manual": c.manual_title or "Phase-Maker-Converters-General-Manual.pdf",
+                        "page": c.page_number,
+                        "section": c.section,
+                        "relevance_score": c.similarity_score,
+                    }
+                    for c in (session.reranked_chunks or session.retrieved_chunks or [])
+                ],
                 "evidence_images": evidence_images,
             }
 
@@ -764,6 +782,9 @@ Respond ONLY in valid JSON:
             result = {
                 "step": 8,
                 "title": "Grounded Diagnosis, Solution Ranking & Report",
+                "report_id": report_id,
+                "pdf_url": f"/api/reports/{report_id}/pdf",
+                "html_url": f"/api/reports/{report_id}/html",
                 "final_result": final_data,
                 "extracted_specifications": analysis.get("specifications", []),
                 "detected_language": analysis.get("language", "en"),

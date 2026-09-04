@@ -1,0 +1,18 @@
+MANUAL: CNC-X100 Milling Center Service Manual
+EQUIPMENT: CNC-X100
+MODEL: X100
+SECTION: Error Codes & Electrical Diagnostics
+PAGE: 214
+
+ERROR CODE E101: Spindle Motor Overheating Detected.
+SYMPTOM: Motor housing temperature exceeds 85°C. System stops with thermal fault alarm.
+PROBABLE CAUSES:
+1. Spindle cooling fan failure or disconnected power cable
+2. Air intake ventilation filters clogged with chips and coolant mist
+3. Heavy continuous cut overload exceeding 120% duty cycle rating
+
+CORRECTIVE ACTION:
+1. Stop the CNC spindle immediately and allow 20 minutes cooling period.
+2. Inspect the 24V DC auxiliary cooling fan behind the spindle headstock.
+3. Clean or replace the metal mesh air ventilation filters.
+4. Check spindle motor load meter on the CNC operator panel.

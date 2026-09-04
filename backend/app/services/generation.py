@@ -8,8 +8,6 @@ import json
 import logging
 from typing import Optional
 
-from openai import AzureOpenAI
-
 from app.core.config import settings
 from app.services.retrieval.hybrid_retriever import RetrievedChunk
 
@@ -132,7 +130,7 @@ class GenerationService:
             parsed = openai_client.json_completion(messages)
 
             logger.info(
-                f"OpenAI 5.5 response generated successfully. "
+                f"Groq ({settings.GROQ_MODEL}) response generated successfully. "
                 f"Confidence: {parsed.get('confidence', 'N/A')}"
             )
             return parsed

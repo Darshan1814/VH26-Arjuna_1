@@ -7,6 +7,10 @@ from pydantic_settings import BaseSettings
 class Settings(BaseSettings):
     """All configuration is loaded from environment variables."""
 
+    # --- Groq Configuration ---
+    GROQ_API_KEY: str = "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"
+    GROQ_MODEL: str = "qwen/qwen3.8-27b"
+
     # --- OpenAI Configuration ---
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-5.5"

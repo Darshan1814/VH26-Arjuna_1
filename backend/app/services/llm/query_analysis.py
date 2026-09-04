@@ -45,6 +45,21 @@ class QueryAnalysisService:
                 [f"{msg.get('role')}: {msg.get('content')}" for msg in conversation_context[-4:]]
             )
 
+        # Fast path for direct exact error queries (e.g. "E101", "What does E101 mean") to avoid rate limit spikes
+        if regex_errors and len(query.strip().split()) <= 4 and not history_summary:
+            return {
+                "query": query,
+                "machine_model": regex_machines[0] if regex_machines else context_machine_id,
+                "error_codes": regex_errors,
+                "symptoms": [],
+                "specifications": [],
+                "needs_clarification": False,
+                "clarification_questions": [],
+                "intent": "troubleshoot",
+                "language": "en",
+                "is_followup": False,
+            }
+
         prompt = f"""You are a query analysis module in an industrial troubleshooting system.
 Analyze the user's latest message considering previous conversation context.
 

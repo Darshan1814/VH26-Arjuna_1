@@ -100,19 +100,70 @@ class HybridRetriever:
         return deduped[:top_k]
 
     def _search_local_chunks(self, analysis: QueryAnalysis) -> list[RetrievedChunk]:
-        """Search local manual chunks from disk cache when database is empty."""
+        """Search local database chunks and disk cache when remote pgvector is unreachable."""
         import os
         import json
         import uuid
 
         results = []
-        if not os.path.exists(settings.MANUALS_DIR):
-            return results
 
-        query_lower = analysis.semantic_query.lower()
-        terms = [t for t in query_lower.split() if len(t) > 2]
+        # 1. Search SQLite vector database table
+        try:
+            from app.core.sqlite_storage import get_sqlite_storage
+            sql_chunks = get_sqlite_storage().search_chunks(
+                query_text=analysis.semantic_query,
+                machine_model=analysis.machine_id,
+                error_code=analysis.error_codes[0] if analysis.error_codes else None,
+                top_k=10,
+            )
+            for sc in sql_chunks:
+                raw_errs = sc.get("error_codes")
+                err_list = []
+                if isinstance(raw_errs, str):
+                    try:
+                        err_list = json.loads(raw_errs)
+                    except Exception:
+                        err_list = [raw_errs] if raw_errs else []
+                elif isinstance(raw_errs, list):
+                    err_list = raw_errs
+                if not err_list and sc.get("error_code"):
+                    err_list = [sc["error_code"]]
 
-        # 1. Check disk chunks JSON
+                machine_val = sc.get("machine") or sc.get("machine_model") or "Universal"
+                meta_raw = sc.get("metadata")
+                meta_dict = {}
+                if isinstance(meta_raw, dict):
+                    meta_dict = meta_raw
+                elif isinstance(meta_raw, str):
+                    try:
+                        meta_dict = json.loads(meta_raw)
+                    except Exception:
+                        meta_dict = {}
+
+                results.append(
+                    RetrievedChunk(
+                        id=sc.get("id") or str(uuid.uuid4())[:8],
+                        content=sc.get("content", ""),
+                        page_number=sc.get("page_number", 1),
+                        section=sc.get("section", "General"),
+                        chunk_index=sc.get("chunk_index", 0),
+                        error_codes=err_list,
+                        manual_id=sc.get("filename", "Manual"),
+                        machine_id=machine_val,
+                        manual_title=sc.get("filename", "Technical Service Manual"),
+                        machine_model=machine_val,
+                        similarity_score=sc.get("similarity_score", 0.85),
+                        match_type=sc.get("match_type", "vector"),
+                        metadata=meta_dict,
+                    )
+                )
+        except Exception as sql_e:
+            logger.warning(f"Could not retrieve from SQLite chunks: {sql_e}")
+
+        # 2. Check disk chunks JSON
+        if os.path.exists(settings.MANUALS_DIR):
+            query_lower = analysis.semantic_query.lower()
+            terms = [t for t in query_lower.split() if len(t) > 2]
         for fname in os.listdir(settings.MANUALS_DIR):
             if fname.endswith(".chunks.json"):
                 try:
