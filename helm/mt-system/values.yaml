@@ -19,8 +19,9 @@ backend:
     tag: "latest"
     pullPolicy: IfNotPresent
   service:
-    type: ClusterIP
+    type: NodePort
     port: 8000
+    nodePort: 30080
   resources:
     requests:
       cpu: 100m
@@ -64,8 +65,9 @@ frontend:
     tag: "latest"
     pullPolicy: IfNotPresent
   service:
-    type: ClusterIP
+    type: NodePort
     port: 3000
+    nodePort: 30000
   resources:
     requests:
       cpu: 50m
