@@ -65,7 +65,7 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
   { code: "hu", name: "Hungarian", nativeName: "Magyar", flag: "🇭🇺", countryCode: "hu", region: "Global" },
   { code: "ro", name: "Romanian", nativeName: "Română", flag: "🇷🇴", countryCode: "ro", region: "Global" },
   { code: "uk", name: "Ukrainian", nativeName: "Українська", flag: "🇺🇦", countryCode: "ua", region: "Global" },
-  { code: "he", name: "Hebrew", nativeName: "עברית", flag: "🇮🇱", countryCode: "il", region: "Global" },
+  { code: "he", name: "Hebrew", nativeName: "עבריत", flag: "🇮🇱", countryCode: "il", region: "Global" },
   { code: "fa", name: "Persian", nativeName: "فارسی", flag: "🇮🇷", countryCode: "ir", region: "Global" },
   { code: "ms", name: "Malay", nativeName: "Bahasa Melayu", flag: "🇲🇾", countryCode: "my", region: "Global" },
   { code: "tl", name: "Filipino", nativeName: "Filipino", flag: "🇵🇭", countryCode: "ph", region: "Global" },
@@ -99,35 +99,118 @@ const INITIAL_CORE_STRINGS = [
   "Machine Troubleshooter",
   "Chatbot",
   "Process Flow",
-  "Troubleshooting Assistant",
-  "Ask about error codes, machine issues, or troubleshooting steps",
+  "Industrial Diagnostic Assistant",
+  "Active Knowledge Base",
+  "None (Upload document to begin)",
+  "Cancel / Change",
+  "Upload Equipment Documentation",
+  "Upload an OEM manual, circuit diagram, or error log (PDF, PNG, CSV). Grounded diagnostic suggestions will be dynamically generated once indexed.",
+  "Select & Upload Manual",
+  "Use Ingested PhaseMaker RC Manual",
+  "Supports: PDF, DOCX, PNG, JPG, CSV, LOG, TXT with multilingual extraction.",
   "Clear conversation",
-  "Type your question...",
-  "Send",
+  "Describe the machine fault, alarm, or ask questions from uploaded manuals...",
+  "Describe the machine issue or enter an error code...",
+  "Listening... Your voice will transcribe here.",
+  "Stop",
+  "Voice Language",
+  "Voice Input",
+  "Click to stop listening",
+  "Send message",
+  "Analyzing technical documentation, logs & manuals...",
+  "Diagnostic Finding:",
+  "Mandatory Safety Precautions",
+  "Ambiguity Detected — Please Specify Equipment:",
+  "Insufficient Information",
+  "Ranked Corrective Solutions",
+  "Ranked by Evidence Strength",
+  "Yellow-Highlighted Source Manual Evidence",
+  "Source Citations",
+  "Download PDF Report",
+  "View HTML Report",
+  "View Interactive HTML Report",
+  "HIGH Confidence",
+  "MEDIUM Confidence",
+  "LOW Confidence",
+  "High confidence",
+  "Medium confidence",
+  "Low confidence",
+  "confidence",
   "What does error E101 mean?",
   "Why is my CNC-X100 overheating?",
   "What does E101 mean on PRESS-Z200?",
-  "Get diagnostic help from service manuals. Ask about error codes, symptoms, or troubleshooting procedures.",
-  "PDF Manuals",
-  "Document Processing",
-  "OCR / Layout Extraction",
-  "Chunking",
-  "Embeddings (BGE-M3)",
-  "Hybrid Retrieval",
-  "Reranking",
-  "Evidence Verification",
-  "Response Generation",
-  "Citations & Highlights",
+  "Industrial Machine Troubleshooting",
+  "Document Intake & Language Detection",
+  "Multimodal Document Extraction & OCR",
+  "Equipment & Technical Structure Extraction",
+  "Semantic Chunking & Embedding Generation",
+  "Database & pgvector Storage",
+  "Diagnostic Index & Context Preparation",
+  "Evidence Verification & Confidence Calibration",
+  "User Query Verification & Grounded Diagnosis",
+  "Ingestion",
+  "Extraction",
+  "Storage",
+  "Retrieval",
+  "Diagnosis",
+  "Auto-Run (8 Steps)",
+  "Pause Auto-Run",
+  "Restart to Step 1",
+  "Run Step",
+  "Next: Step",
+  "Executing Step",
+  "Step",
+  "of 8",
+  "Previous",
+  "Live Stage Telemetry",
+  "Live Pipeline Telemetry",
+  "Verified Output",
+  "Report ID",
+  "REPORT",
+  "Diagnostic Report Preview",
+  "Industrial Diagnostic Documentation",
+  "Print",
+  "Download PDF",
+  "Full Screen",
+  "Report Unavailable",
+  "Select Language (70 Available)",
+  "Search 70 languages...",
+  "No matching language found",
+  "Translating...",
   "Language",
   "Select Language",
-  "Search language...",
-  "Translating...",
-  "RAG Pipeline Architecture",
-  "How the Machine Troubleshooter processes service manuals and generates cited troubleshooting answers using Retrieval-Augmented Generation.",
   "The pipeline enforces strict evidence-based answers. If retrieved evidence is insufficient, the system will not hallucinate — it will clearly state that it lacks information.",
-  "Describe the machine issue or enter an error code...",
-  "Voice input (coming soon)",
-  "Send message",
+  "Active document cancelled. Please upload a new manual.",
+  "Total Documents",
+  "Detected Language",
+  "Pipeline State",
+  "Ingested & Verified",
+  "Upload Service Manual or Schematic",
+  "Supports PDF manuals, OCR images, CSV tables, and error logs",
+  "Select File",
+  "Re-run Step",
+  "Next Step",
+  "Verify & Process Diagnostic Query",
+  "Equipment Troubleshooting Query:",
+  "Derived from Manual:",
+  "Uploaded Equipment Documents",
+  "+ Upload Another Manual",
+  "Pages Processed",
+  "Tables Extracted",
+  "Diagrams Detected",
+  "OCR Processed",
+  "Pages",
+  "Extracted Document Sections:",
+  "Section",
+  "Page",
+  "Equipment Identification Verdict:",
+  "Operating Subsystems Identified:",
+  "Mandatory Safety Precautions:",
+  "Semantic Chunks",
+  "Vector Dimension",
+  "Embedding Model",
+  "Indexed Semantic Chunk Excerpts:",
+  "Dense"
 ];
 
 interface LanguageContextType {
@@ -141,12 +224,88 @@ interface LanguageContextType {
 
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
+// Extend Node type for storing original English text
+interface ExtTextNode extends Text {
+  __origEnglish?: string;
+  __translatedFor?: string;
+}
+
+// Global WeakMap so original English text survives across React renders and unmounts
+const nodeEnglishMap = new WeakMap<Node, string>();
+
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
   const [currentLanguage, setCurrentLanguageState] = useState<string>("en");
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const [isTranslating, setIsTranslating] = useState<boolean>(false);
-  const registeredStringsRef = useRef<Set<string>>(new Set(INITIAL_CORE_STRINGS));
 
+  const registeredStringsRef = useRef<Set<string>>(new Set(INITIAL_CORE_STRINGS));
+  const translationsRef = useRef<Record<string, string>>({});
+  const reverseMapRef = useRef<Record<string, string>>({});
+  const pendingBatchRef = useRef<Set<string>>(new Set());
+  const batchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Synchronize translations ref and populate reverse translation map
+  useEffect(() => {
+    translationsRef.current = translations;
+    Object.entries(translations).forEach(([eng, trans]) => {
+      if (trans && trans !== eng) {
+        reverseMapRef.current[trans.trim()] = eng.trim();
+      }
+    });
+  }, [translations]);
+
+  // Synchronous, foolproof restore to original English for the entire webpage
+  const restoreAllEnglish = useCallback(() => {
+    if (typeof window === "undefined") return;
+
+    // 1. Walk every text node in document.body
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      null
+    );
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      const extNode = node as ExtTextNode;
+      const orig = nodeEnglishMap.get(extNode) || extNode.__origEnglish;
+      if (orig) {
+        if (extNode.nodeValue !== orig) {
+          extNode.nodeValue = orig;
+        }
+        delete extNode.__translatedFor;
+      } else if (extNode.nodeValue) {
+        // Reverse dictionary lookup for any node that didn't have __origEnglish set
+        const trimmed = extNode.nodeValue.trim();
+        const reversed = reverseMapRef.current[trimmed];
+        if (reversed) {
+          extNode.nodeValue = extNode.nodeValue.replace(trimmed, reversed);
+          extNode.__origEnglish = extNode.nodeValue;
+          nodeEnglishMap.set(extNode, extNode.nodeValue);
+          delete extNode.__translatedFor;
+        }
+      }
+    }
+
+    // 2. Restore all input / textarea placeholders
+    const inputs = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+      "input[placeholder], textarea[placeholder]"
+    );
+    inputs.forEach((input) => {
+      if (input.dataset.origPlaceholder) {
+        input.placeholder = input.dataset.origPlaceholder;
+      }
+    });
+
+    // 3. Restore all element titles (tooltips)
+    const titled = document.querySelectorAll<HTMLElement>("[title]");
+    titled.forEach((el) => {
+      if (el.dataset.origTitle) {
+        el.title = el.dataset.origTitle;
+      }
+    });
+  }, []);
+
+  // Load language from storage on initial mount
   useEffect(() => {
     try {
       const savedLang = localStorage.getItem("app_language");
@@ -156,38 +315,51 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     } catch {}
   }, []);
 
-  const translateRegisteredStrings = async (targetLang: string) => {
-    if (targetLang === "en") {
-      setTranslations({});
-      return;
-    }
+  // Flush queued strings to translate endpoint
+  const flushTranslationBatch = useCallback(async (targetLang: string) => {
+    if (targetLang === "en") return;
+    const stringsToTranslate = Array.from(pendingBatchRef.current);
+    pendingBatchRef.current.clear();
 
+    if (stringsToTranslate.length === 0) return;
+
+    setIsTranslating(true);
     const cacheKey = `trans_cache_${targetLang}`;
     let cachedMap: Record<string, string> = {};
     try {
       const raw = localStorage.getItem(cacheKey);
       if (raw) cachedMap = JSON.parse(raw);
-    } catch {
-      cachedMap = {};
+    } catch {}
+
+    // Verify cache does not contain untranslated English strings
+    const missing = stringsToTranslate.filter((s) => {
+      const cached = cachedMap[s] || translationsRef.current[s];
+      return !cached || cached.trim() === s.trim();
+    });
+
+    // Apply any valid cached translations immediately
+    const immediateUpdates: Record<string, string> = {};
+    stringsToTranslate.forEach((s) => {
+      if (cachedMap[s] && cachedMap[s].trim() !== s.trim()) {
+        immediateUpdates[s] = cachedMap[s];
+        reverseMapRef.current[cachedMap[s].trim()] = s.trim();
+      }
+    });
+    if (Object.keys(immediateUpdates).length > 0) {
+      setTranslations((prev) => ({ ...prev, ...immediateUpdates }));
     }
 
-    const allStrings = Array.from(registeredStringsRef.current);
-    const missingStrings = allStrings.filter((s) => !cachedMap[s]);
-
-    if (missingStrings.length === 0) {
-      setTranslations(cachedMap);
+    if (missing.length === 0) {
+      setIsTranslating(false);
       return;
     }
-
-    setTranslations((prev) => ({ ...prev, ...cachedMap }));
-    setIsTranslating(true);
 
     try {
       const response = await fetch("/api/translate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          q: missingStrings,
+          q: missing,
           source: "en",
           target: targetLang,
         }),
@@ -199,65 +371,305 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
           ? data.translated_text
           : [data.translated_text];
 
-        const updatedMap = { ...cachedMap };
-        missingStrings.forEach((str, idx) => {
-          if (translatedArray[idx]) {
-            updatedMap[str] = translatedArray[idx];
+        const newUpdates: Record<string, string> = {};
+        missing.forEach((str, idx) => {
+          const trans = translatedArray[idx];
+          // Only accept and cache if genuinely translated
+          if (trans && trans.trim() && trans.trim() !== str.trim()) {
+            newUpdates[str] = trans;
+            cachedMap[str] = trans;
+            reverseMapRef.current[trans.trim()] = str.trim();
           }
         });
 
-        setTranslations(updatedMap);
-        try {
-          localStorage.setItem(cacheKey, JSON.stringify(updatedMap));
-        } catch {}
+        if (Object.keys(newUpdates).length > 0) {
+          setTranslations((prev) => ({ ...prev, ...newUpdates }));
+          try {
+            localStorage.setItem(cacheKey, JSON.stringify(cachedMap));
+          } catch {}
+        }
       }
     } catch (err) {
-      console.warn("Translation error:", err);
+      console.warn("Translation API error:", err);
     } finally {
       setIsTranslating(false);
     }
-  };
+  }, []);
 
-  const registerStrings = useCallback((newStrings: string[]) => {
-    let added = false;
-    newStrings.forEach((s) => {
-      if (s && !registeredStringsRef.current.has(s)) {
-        registeredStringsRef.current.add(s);
-        added = true;
-      }
-    });
-    if (added && currentLanguage !== "en") {
-      translateRegisteredStrings(currentLanguage);
-    }
-  }, [currentLanguage]);
+  // Queue text to be translated
+  const queueForTranslation = useCallback(
+    (text: string, targetLang: string) => {
+      if (targetLang === "en" || !text.trim()) return;
+      if (translationsRef.current[text] && translationsRef.current[text].trim() !== text.trim()) return;
 
+      pendingBatchRef.current.add(text);
+      if (batchTimeoutRef.current) clearTimeout(batchTimeoutRef.current);
+      batchTimeoutRef.current = setTimeout(() => {
+        flushTranslationBatch(targetLang);
+      }, 80);
+    },
+    [flushTranslationBatch]
+  );
+
+  // Switch Language
   const setLanguage = (code: string) => {
     if (code === currentLanguage) return;
     setCurrentLanguageState(code);
     try {
       localStorage.setItem("app_language", code);
     } catch {}
-    translateRegisteredStrings(code);
+
+    if (code === "en") {
+      setTranslations({});
+      // Synchronously restore all English immediately without waiting for any async ticks
+      restoreAllEnglish();
+      return;
+    }
+
+    // Load cached map for selected language
+    const cacheKey = `trans_cache_${code}`;
+    let cachedMap: Record<string, string> = {};
+    try {
+      const raw = localStorage.getItem(cacheKey);
+      if (raw) cachedMap = JSON.parse(raw);
+    } catch {}
+
+    // Populate reverse map from cache
+    Object.entries(cachedMap).forEach(([eng, trans]) => {
+      if (trans && trans !== eng) {
+        reverseMapRef.current[trans.trim()] = eng.trim();
+      }
+    });
+
+    setTranslations(cachedMap);
+
+    // Queue all core strings
+    const allCore = Array.from(registeredStringsRef.current);
+    allCore.forEach((str) => {
+      if (!cachedMap[str] || cachedMap[str].trim() === str.trim()) {
+        pendingBatchRef.current.add(str);
+      }
+    });
+    flushTranslationBatch(code);
   };
 
+  // Initial load for non-en language
   useEffect(() => {
     if (currentLanguage !== "en") {
-      translateRegisteredStrings(currentLanguage);
+      const cacheKey = `trans_cache_${currentLanguage}`;
+      let cachedMap: Record<string, string> = {};
+      try {
+        const raw = localStorage.getItem(cacheKey);
+        if (raw) cachedMap = JSON.parse(raw);
+      } catch {}
+      setTranslations(cachedMap);
+
+      const allCore = Array.from(registeredStringsRef.current);
+      allCore.forEach((str) => {
+        if (!cachedMap[str] || cachedMap[str].trim() === str.trim()) {
+          pendingBatchRef.current.add(str);
+        }
+      });
+      flushTranslationBatch(currentLanguage);
     } else {
       setTranslations({});
+      restoreAllEnglish();
     }
-  }, [currentLanguage]);
+  }, [currentLanguage, flushTranslationBatch, restoreAllEnglish]);
 
+  // Translate helper for components
   const t = useCallback(
     (text: string, fallback?: string): string => {
       if (currentLanguage === "en" || !text) return text;
-      if (!registeredStringsRef.current.has(text)) {
-        registeredStringsRef.current.add(text);
-      }
-      return translations[text] || fallback || text;
+      const clean = text.trim();
+      const translated = translations[clean] || translations[text];
+      if (translated && translated.trim() !== clean) return translated;
+
+      // Automatically queue missing text
+      queueForTranslation(text, currentLanguage);
+      return fallback || text;
     },
-    [currentLanguage, translations]
+    [currentLanguage, translations, queueForTranslation]
   );
+
+  const registerStrings = useCallback(
+    (newStrings: string[]) => {
+      newStrings.forEach((s) => {
+        if (s && !registeredStringsRef.current.has(s)) {
+          registeredStringsRef.current.add(s);
+          if (currentLanguage !== "en" && !translationsRef.current[s]) {
+            pendingBatchRef.current.add(s);
+          }
+        }
+      });
+      if (currentLanguage !== "en" && pendingBatchRef.current.size > 0) {
+        if (batchTimeoutRef.current) clearTimeout(batchTimeoutRef.current);
+        batchTimeoutRef.current = setTimeout(() => {
+          flushTranslationBatch(currentLanguage);
+        }, 80);
+      }
+    },
+    [currentLanguage, flushTranslationBatch]
+  );
+
+  // =========================================================================
+  // AUTOMATIC FULL-WEBPAGE DOM TEXT-NODE TRANSLATOR
+  // =========================================================================
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    // Helper: Is element excluded from translation?
+    const isExcluded = (el: HTMLElement | null): boolean => {
+      if (!el) return false;
+      const tag = el.tagName?.toLowerCase();
+      if (
+        tag === "script" ||
+        tag === "style" ||
+        tag === "code" ||
+        tag === "pre" ||
+        tag === "svg" ||
+        tag === "path"
+      ) {
+        return true;
+      }
+      if (el.getAttribute("data-no-translate") === "true") return true;
+      if (el.classList?.contains("no-translate")) return true;
+      if (el.closest?.("[data-no-translate='true']")) return true;
+      return false;
+    };
+
+    const hasLanguageLetters = (text: string) => {
+      return /[a-zA-Z\u00C0-\uFFFF]/.test(text);
+    };
+
+    // Traverse and translate all visible text nodes in the DOM
+    const translateDomNodes = () => {
+      if (currentLanguage === "en") {
+        restoreAllEnglish();
+        return;
+      }
+
+      const walker = document.createTreeWalker(
+        document.body,
+        NodeFilter.SHOW_TEXT,
+        {
+          acceptNode(node) {
+            const parent = node.parentElement;
+            if (!parent || isExcluded(parent)) return NodeFilter.FILTER_REJECT;
+            const extNode = node as ExtTextNode;
+            if (extNode.__origEnglish || nodeEnglishMap.has(extNode)) return NodeFilter.FILTER_ACCEPT;
+            const val = node.nodeValue?.trim();
+            if (!val || val.length < 2) return NodeFilter.FILTER_SKIP;
+            if (!hasLanguageLetters(val)) return NodeFilter.FILTER_SKIP;
+            return NodeFilter.FILTER_ACCEPT;
+          },
+        }
+      );
+
+      let node: Node | null;
+      while ((node = walker.nextNode())) {
+        const extNode = node as ExtTextNode;
+        const currentVal = extNode.nodeValue || "";
+
+        // First encounter of this node: store original English
+        if (!extNode.__origEnglish && !nodeEnglishMap.has(extNode)) {
+          const trimmed = currentVal.trim();
+          // If node was rendered while foreign language was active, check reverse map
+          const knownEnglish = reverseMapRef.current[trimmed];
+          const initialEnglish = knownEnglish ? currentVal.replace(trimmed, knownEnglish) : currentVal;
+          extNode.__origEnglish = initialEnglish;
+          nodeEnglishMap.set(extNode, initialEnglish);
+        }
+
+        const originalText = (extNode.__origEnglish || nodeEnglishMap.get(extNode) || currentVal).trim();
+        if (!originalText) continue;
+
+        // Skip if already translated for the currently active language
+        if (extNode.__translatedFor === currentLanguage) continue;
+
+        const translated =
+          translationsRef.current[originalText] ||
+          translationsRef.current[extNode.__origEnglish || ""];
+
+        if (translated && translated.trim() !== originalText) {
+          const template = extNode.__origEnglish || nodeEnglishMap.get(extNode) || currentVal;
+          extNode.nodeValue = template.replace(originalText, translated);
+          extNode.__translatedFor = currentLanguage;
+          reverseMapRef.current[translated.trim()] = originalText;
+        } else {
+          // Queue for background translation
+          queueForTranslation(originalText, currentLanguage);
+        }
+      }
+
+      // Translate input & textarea placeholders
+      const inputs = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+        "input[placeholder], textarea[placeholder]"
+      );
+      inputs.forEach((input) => {
+        if (isExcluded(input)) return;
+        if (!input.dataset.origPlaceholder) {
+          const knownEng = reverseMapRef.current[input.placeholder.trim()];
+          input.dataset.origPlaceholder = knownEng || input.placeholder;
+        }
+        const orig = input.dataset.origPlaceholder.trim();
+        if (!orig || !hasLanguageLetters(orig)) return;
+
+        if (translationsRef.current[orig] && translationsRef.current[orig].trim() !== orig) {
+          input.placeholder = translationsRef.current[orig];
+          reverseMapRef.current[translationsRef.current[orig].trim()] = orig;
+        } else {
+          queueForTranslation(orig, currentLanguage);
+        }
+      });
+
+      // Translate element titles (tooltips)
+      const titledElements = document.querySelectorAll<HTMLElement>("[title]");
+      titledElements.forEach((el) => {
+        if (isExcluded(el)) return;
+        if (!el.dataset.origTitle) {
+          const knownEng = reverseMapRef.current[el.title.trim()];
+          el.dataset.origTitle = knownEng || el.title;
+        }
+        const orig = el.dataset.origTitle.trim();
+        if (!orig || !hasLanguageLetters(orig)) return;
+
+        if (translationsRef.current[orig] && translationsRef.current[orig].trim() !== orig) {
+          el.title = translationsRef.current[orig];
+          reverseMapRef.current[translationsRef.current[orig].trim()] = orig;
+        } else {
+          queueForTranslation(orig, currentLanguage);
+        }
+      });
+    };
+
+    // Execute DOM translation
+    translateDomNodes();
+
+    // Observe only added/removed child nodes (NEVER observe characterData)
+    const observer = new MutationObserver((mutations) => {
+      let hasAddedNodes = false;
+      for (const mut of mutations) {
+        if (mut.type === "childList" && mut.addedNodes.length > 0) {
+          hasAddedNodes = true;
+          break;
+        }
+      }
+      if (hasAddedNodes) {
+        translateDomNodes();
+      }
+    });
+
+    observer.observe(document.body, {
+      childList: true,
+      subtree: true,
+      characterData: false,
+    });
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [currentLanguage, translations, queueForTranslation, restoreAllEnglish]);
 
   return (
     <LanguageContext.Provider

@@ -266,17 +266,17 @@ export default function ProcessFlowPage() {
         <div>
           <div className="flex items-center gap-2">
             <span className="rounded bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 font-mono text-xs px-2 py-0.5 font-bold">
-              SESSION: {sessionId || "INITIALIZING"}
+              {t("SESSION")}: {sessionId || t("INITIALIZING")}
             </span>
             <span className="text-xs text-[var(--color-text-muted)] font-medium">
-              Step {currentStep} of 8 • Powered by OpenAI 5.5
+              {t("Step")} {currentStep} {t("of 8")} • {t("Powered by OpenAI 5.5")}
             </span>
           </div>
           <h1 className="text-xl font-extrabold text-[var(--color-text)] mt-1">
-            Industrial Diagnostic Process Flow
+            {t("Industrial Diagnostic Process Flow")}
           </h1>
           <p className="text-xs text-[var(--color-text-muted)]">
-            Step-by-step observable RAG architecture executing live backend telemetry with zero simulated outputs
+            {t("Step-by-step observable RAG architecture executing live backend telemetry with zero simulated outputs")}
           </p>
         </div>
 
@@ -285,31 +285,31 @@ export default function ProcessFlowPage() {
           <button
             onClick={handleBack}
             disabled={currentStep <= 1 || isRunning}
-            className="btn-secondary text-xs flex items-center gap-1 px-3 py-1.5 disabled:opacity-40"
+            className="btn-secondary text-xs flex items-center gap-1 px-3 py-1.5 disabled:opacity-40 cursor-pointer"
           >
             <ChevronLeft className="h-3.5 w-3.5" />
-            Previous
+            {t("Previous")}
           </button>
 
           {/* Primary Next Button that executes the step */}
           <button
             onClick={handleNext}
             disabled={isRunning || (currentStep === 8 && isCurrentStepCompleted)}
-            className="btn-primary text-xs flex items-center gap-1.5 px-4 py-1.5 shadow-sm disabled:opacity-50"
+            className="btn-primary text-xs flex items-center gap-1.5 px-4 py-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
           >
             {isRunning ? (
               <>
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                <span>Executing Step {currentStep}...</span>
+                <span>{t("Executing Step")} {currentStep}...</span>
               </>
             ) : !isCurrentStepCompleted ? (
               <>
-                <span>Run Step {currentStep}</span>
+                <span>{t("Run Step")} {currentStep}</span>
                 <Play className="h-3 w-3 fill-current" />
               </>
             ) : (
               <>
-                <span>Next: Step {currentStep + 1}</span>
+                <span>{t("Next: Step")} {currentStep + 1}</span>
                 <ArrowRight className="h-3.5 w-3.5" />
               </>
             )}
@@ -318,21 +318,21 @@ export default function ProcessFlowPage() {
           <button
             onClick={() => setIsAutoPlay(!isAutoPlay)}
             disabled={isRunning}
-            className={`text-xs flex items-center gap-1 px-3 py-1.5 rounded-lg border font-semibold transition ${
+            className={`text-xs flex items-center gap-1 px-3 py-1.5 rounded-lg border font-semibold transition cursor-pointer ${
               isAutoPlay
                 ? "bg-amber-100 dark:bg-amber-950 text-amber-800 border-amber-400"
                 : "bg-[var(--color-surface)] text-[var(--color-text)] border-[var(--color-border)] hover:bg-[var(--color-surface-elevated)]"
             }`}
           >
             {isAutoPlay ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-            {isAutoPlay ? "Pause Auto-Run" : "Auto-Run (8 Steps)"}
+            {isAutoPlay ? t("Pause Auto-Run") : t("Auto-Run (8 Steps)")}
           </button>
 
           <button
             onClick={handleRestart}
             disabled={isRunning}
-            className="btn-secondary text-xs flex items-center gap-1 px-2.5 py-1.5 text-[var(--color-text-muted)] hover:text-red-600"
-            title="Restart to Step 1"
+            className="btn-secondary text-xs flex items-center gap-1 px-2.5 py-1.5 text-[var(--color-text-muted)] hover:text-red-600 cursor-pointer"
+            title={t("Restart to Step 1")}
           >
             <RotateCcw className="h-3.5 w-3.5" />
           </button>
@@ -384,11 +384,11 @@ export default function ProcessFlowPage() {
                     {step.num}
                   </span>
                   <span className="text-[9px] uppercase tracking-wider text-[var(--color-text-muted)] font-semibold">
-                    {step.category}
+                    {t(step.category)}
                   </span>
                 </div>
                 <div className="text-[11px] font-semibold text-[var(--color-text)] truncate w-full text-center">
-                  {step.title.split("&")[0].trim()}
+                  {t(step.title.split("&")[0].trim())}
                 </div>
               </button>
             );
@@ -407,16 +407,16 @@ export default function ProcessFlowPage() {
               </div>
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-[var(--color-primary)]">
-                  Step {currentStepData.num} of 8 • {currentStepData.category}
+                  {t("Step")} {currentStepData.num} {t("of 8")} • {t(currentStepData.category)}
                 </span>
                 <h2 className="text-base font-bold text-[var(--color-text)]">
-                  {currentStepData.title}
+                  {t(currentStepData.title)}
                 </h2>
               </div>
             </div>
 
             <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-              {currentStepData.description}
+              {t(currentStepData.description)}
             </p>
 
             {/* Step 1 File Upload Action */}
@@ -432,16 +432,16 @@ export default function ProcessFlowPage() {
                 />
                 <Upload className="h-6 w-6 mx-auto text-[var(--color-primary)]" />
                 <p className="text-xs font-semibold text-[var(--color-text)]">
-                  Upload Service Manual or Schematic
+                  {t("Upload Service Manual or Schematic")}
                 </p>
                 <p className="text-[10px] text-[var(--color-text-muted)]">
-                  Supports PDF manuals, OCR images, CSV tables, and error logs
+                  {t("Supports PDF manuals, OCR images, CSV tables, and error logs")}
                 </p>
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="btn-primary text-xs px-3 py-1.5 mt-2"
+                  className="btn-primary text-xs px-3 py-1.5 mt-2 cursor-pointer"
                 >
-                  Select File
+                  {t("Select File")}
                 </button>
               </div>
             )}
@@ -450,18 +450,18 @@ export default function ProcessFlowPage() {
             {currentStep === 8 && (
               <div className="space-y-3 pt-1">
                 <label className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block">
-                  Equipment Troubleshooting Query:
+                  {t("Equipment Troubleshooting Query:")}
                 </label>
                 <textarea
                   value={queryInput}
                   onChange={(e) => setQueryInput(e.target.value)}
                   className="input-base text-xs w-full resize-none"
                   rows={3}
-                  placeholder="Enter equipment troubleshooting question (e.g. in English or Hindi)..."
+                  placeholder={t("Enter equipment troubleshooting question (e.g. in English or Hindi)...")}
                 />
                 <div className="space-y-1">
                   <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">
-                    Derived from Manual:
+                    {t("Derived from Manual:")}
                   </span>
                   {[
                     "Why is the motor making a chattering noise on PhaseMaker Rotary Converter?",
@@ -475,7 +475,7 @@ export default function ProcessFlowPage() {
                       onClick={() => setQueryInput(q)}
                       className="block text-left text-[11px] text-[var(--color-primary)] hover:underline truncate w-full cursor-pointer"
                     >
-                      • {q}
+                      • {t(q)}
                     </button>
                   ))}
                 </div>
@@ -496,7 +496,7 @@ export default function ProcessFlowPage() {
                     ) : (
                       <Play className="h-3.5 w-3.5 fill-current text-[var(--color-primary)]" />
                     )}
-                    <span>Re-run Step {currentStep}</span>
+                    <span>{t("Re-run Step")} {currentStep}</span>
                   </button>
 
                   <button
@@ -504,7 +504,7 @@ export default function ProcessFlowPage() {
                     disabled={isRunning}
                     className="btn-primary text-xs flex-1 py-2 flex items-center justify-center gap-1.5 cursor-pointer"
                   >
-                    <span>Next Step</span>
+                    <span>{t("Next Step")}</span>
                     <ChevronRight className="h-3.5 w-3.5" />
                   </button>
                 </>
@@ -517,12 +517,12 @@ export default function ProcessFlowPage() {
                   {isRunning ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Verifying & Processing Query with OpenAI 5.5...</span>
+                      <span>{t("Verifying & Processing Query with OpenAI 5.5...")}</span>
                     </>
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4" />
-                      <span>Verify & Process Diagnostic Query</span>
+                      <span>{t("Verify & Process Diagnostic Query")}</span>
                     </>
                   )}
                 </button>
@@ -537,17 +537,17 @@ export default function ProcessFlowPage() {
             <div className="flex items-center justify-between border-b pb-3 mb-4">
               <div className="flex items-center gap-2">
                 <span className="font-bold text-sm text-[var(--color-text)]">
-                  Live Stage Telemetry
+                  {t("Live Stage Telemetry")}
                 </span>
                 {isCurrentStepCompleted && (
                   <span className="inline-flex items-center gap-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 px-2 py-0.5 text-[10px] font-bold text-emerald-700 dark:text-emerald-400">
                     <CheckCircle className="h-3 w-3" />
-                    Verified Output
+                    {t("Verified Output")}
                   </span>
                 )}
               </div>
               <span className="text-xs font-mono text-[var(--color-text-muted)]">
-                STEP {currentStep} / 8
+                {t("STEP")} {currentStep} / 8
               </span>
             </div>
 
@@ -569,16 +569,16 @@ export default function ProcessFlowPage() {
               <div className="space-y-4 text-xs">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Total Documents</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("Total Documents")}</span>
                     <p className="text-base font-bold text-[var(--color-text)] mt-0.5">{activeTelemetry.total_files ?? (activeTelemetry.files?.length ?? 0)}</p>
                   </div>
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Detected Language</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("Detected Language")}</span>
                     <p className="text-base font-bold text-emerald-600 mt-0.5 uppercase">{activeTelemetry.primary_language || "EN"}</p>
                   </div>
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Pipeline State</span>
-                    <p className="text-base font-bold text-blue-600 mt-0.5">Ingested & Verified</p>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("Pipeline State")}</span>
+                    <p className="text-base font-bold text-blue-600 mt-0.5">{t("Ingested & Verified")}</p>
                   </div>
                 </div>
 
@@ -586,12 +586,12 @@ export default function ProcessFlowPage() {
                   <div className="rounded-lg border p-4 bg-blue-50/40 dark:bg-blue-950/20 space-y-2">
                     <div className="flex items-center gap-1.5 font-bold text-blue-900 dark:text-blue-300">
                       <Sparkles className="h-4 w-4" />
-                      <span>OpenAI Technical Document Profile:</span>
+                      <span>{t("OpenAI Technical Document Profile:")}</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                      <div><strong>Equipment Name:</strong> {activeTelemetry.document_profile.equipment_name}</div>
-                      <div><strong>Document Type:</strong> {activeTelemetry.document_profile.document_type}</div>
-                      <div className="md:col-span-2"><strong>Scope:</strong> {activeTelemetry.document_profile.scope}</div>
+                      <div><strong>{t("Equipment Name:")}</strong> {activeTelemetry.document_profile.equipment_name}</div>
+                      <div><strong>{t("Document Type:")}</strong> {activeTelemetry.document_profile.document_type}</div>
+                      <div className="md:col-span-2"><strong>{t("Scope:")}</strong> {activeTelemetry.document_profile.scope}</div>
                     </div>
                   </div>
                 )}
@@ -600,14 +600,14 @@ export default function ProcessFlowPage() {
                 <div>
                   <div className="flex items-center justify-between mb-2.5">
                     <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block">
-                      Uploaded Equipment Documents ({activeTelemetry.files?.length || 0}):
+                      {t("Uploaded Equipment Documents")} ({activeTelemetry.files?.length || 0}):
                     </span>
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       className="text-[10px] text-[var(--color-primary)] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
                     >
                       <Upload className="h-3 w-3" />
-                      <span>+ Upload Another Manual</span>
+                      <span>+ {t("Upload Another Manual")}</span>
                     </button>
                   </div>
 

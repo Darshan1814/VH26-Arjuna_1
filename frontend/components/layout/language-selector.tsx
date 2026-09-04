@@ -66,7 +66,7 @@ export function LanguageSelector() {
   }, [searchQuery]);
 
   return (
-    <div className="relative inline-block text-left" ref={dropdownRef}>
+    <div className="relative inline-block text-left" ref={dropdownRef} data-no-translate="true">
       {/* Clean Single Dropdown Trigger Button */}
       <button
         type="button"

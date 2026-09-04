@@ -1,8 +1,13 @@
+"use client";
+
+import { useLanguage } from "@/context/language-context";
+
 interface Props {
   confidence: number;
 }
 
 export function ConfidenceBadge({ confidence }: Props) {
+  const { t } = useLanguage();
   const percentage = Math.round(confidence * 100);
 
   let colorClass: string;
@@ -10,18 +15,18 @@ export function ConfidenceBadge({ confidence }: Props) {
 
   if (percentage >= 80) {
     colorClass = "badge-success";
-    label = "High confidence";
+    label = t("High confidence");
   } else if (percentage >= 50) {
     colorClass = "badge-warning";
-    label = "Medium confidence";
+    label = t("Medium confidence");
   } else {
     colorClass = "badge-error";
-    label = "Low confidence";
+    label = t("Low confidence");
   }
 
   return (
     <span className={colorClass} title={label}>
-      {percentage}% confidence
+      {percentage}% {t("confidence")}
     </span>
   );
 }

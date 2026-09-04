@@ -16,6 +16,7 @@ import {
   X,
 } from "lucide-react";
 import { CitationCard } from "@/components/chat/citation-card";
+import { useLanguage } from "@/context/language-context";
 
 interface Props {
   message: ChatMessage;
@@ -23,6 +24,7 @@ interface Props {
 }
 
 export function MessageBubble({ message, onSelectOption }: Props) {
+  const { t } = useLanguage();
   const isUser = message.role === "user";
   const rag = message.ragResponse;
   const [activeModalImage, setActiveModalImage] = useState<string | null>(null);
@@ -34,21 +36,21 @@ export function MessageBubble({ message, onSelectOption }: Props) {
       return (
         <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-300 dark:border-emerald-800 px-2.5 py-0.5 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
           <CheckCircle2 className="h-3 w-3" />
-          HIGH Confidence ({s}%)
+          {t("HIGH Confidence")} ({s}%)
         </span>
       );
     } else if (level === "LOW" || s < 50) {
       return (
         <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 dark:bg-rose-950/40 border border-rose-300 dark:border-rose-800 px-2.5 py-0.5 text-xs font-semibold text-rose-700 dark:text-rose-400">
           <AlertTriangle className="h-3 w-3" />
-          LOW Confidence ({s}%)
+          {t("LOW Confidence")} ({s}%)
         </span>
       );
     }
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-800 px-2.5 py-0.5 text-xs font-semibold text-amber-700 dark:text-amber-400">
         <AlertTriangle className="h-3 w-3" />
-        MEDIUM Confidence ({s}%)
+        {t("MEDIUM Confidence")} ({s}%)
       </span>
     );
   };
@@ -76,7 +78,7 @@ export function MessageBubble({ message, onSelectOption }: Props) {
           {message.isLoading ? (
             <div className="flex items-center gap-2 text-[var(--color-text-muted)] py-1">
               <Loader2 className="h-4 w-4 animate-spin text-[var(--color-primary)]" />
-              <span>Analyzing technical documentation, logs & manuals...</span>
+              <span>{t("Analyzing technical documentation, logs & manuals...")}</span>
             </div>
           ) : message.isError ? (
             <div className="flex items-center gap-2 text-[var(--color-error)]">
@@ -88,7 +90,7 @@ export function MessageBubble({ message, onSelectOption }: Props) {
               {rag?.diagnosis && (
                 <div className="mb-2 pb-2 border-b border-[var(--color-border)]">
                   <span className="text-xs uppercase tracking-wider font-semibold text-[var(--color-primary)]">
-                    Diagnostic Finding:
+                    {t("Diagnostic Finding:")}
                   </span>
                   <p className="font-medium text-[var(--color-text)] mt-0.5">{rag.diagnosis}</p>
                 </div>
@@ -106,7 +108,7 @@ export function MessageBubble({ message, onSelectOption }: Props) {
               <div className="rounded-lg border-2 border-red-500/40 bg-red-50 dark:bg-red-950/30 p-3 text-xs text-red-900 dark:text-red-300">
                 <div className="flex items-center gap-1.5 font-bold mb-1 uppercase tracking-wide">
                   <ShieldAlert className="h-4 w-4 text-red-600 dark:text-red-400" />
-                  Mandatory Safety Precautions
+                  {t("Mandatory Safety Precautions")}
                 </div>
                 <ul className="list-disc list-inside space-y-0.5 pl-1">
                   {rag.safety_warnings.map((warn, i) => (
@@ -121,7 +123,7 @@ export function MessageBubble({ message, onSelectOption }: Props) {
               <div className="rounded-lg border border-amber-500/50 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs space-y-2">
                 <div className="flex items-center gap-1.5 font-semibold text-amber-900 dark:text-amber-300">
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
-                  <span>Ambiguity Detected — Please Specify Equipment:</span>
+                  <span>{t("Ambiguity Detected — Please Specify Equipment:")}</span>
                 </div>
                 {rag.ambiguity_message && (
                   <p className="text-amber-800 dark:text-amber-400">{rag.ambiguity_message}</p>
@@ -151,7 +153,7 @@ export function MessageBubble({ message, onSelectOption }: Props) {
               <div className="flex items-start gap-2 rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-3 text-xs text-amber-800 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-600" />
                 <div>
-                  <p className="font-semibold">Insufficient Information</p>
+                  <p className="font-semibold">{t("Insufficient Information")}</p>
                   <p className="mt-0.5">{rag.insufficient_message || "Insufficient information in the available sources."}</p>
                 </div>
               </div>
@@ -162,10 +164,10 @@ export function MessageBubble({ message, onSelectOption }: Props) {
               <div className="rounded-lg border bg-[var(--color-surface)] p-3 text-xs space-y-2">
                 <div className="flex items-center justify-between border-b pb-1.5">
                   <span className="font-bold text-[var(--color-text)] uppercase tracking-wider text-[11px]">
-                    Ranked Corrective Solutions
+                    {t("Ranked Corrective Solutions")}
                   </span>
                   <span className="text-[10px] text-[var(--color-text-muted)]">
-                    Ranked by Evidence Strength
+                    {t("Ranked by Evidence Strength")}
                   </span>
                 </div>
                 <div className="space-y-2 pt-1">
@@ -199,7 +201,7 @@ export function MessageBubble({ message, onSelectOption }: Props) {
               <div className="rounded-lg border bg-[var(--color-surface)] p-3 text-xs space-y-2">
                 <div className="flex items-center gap-1.5 font-bold text-[var(--color-text)] uppercase tracking-wider text-[11px]">
                   <ImageIcon className="h-3.5 w-3.5 text-[var(--color-primary)]" />
-                  Yellow-Highlighted Source Manual Evidence
+                  {t("Yellow-Highlighted Source Manual Evidence")}
                 </div>
                 <div className="grid grid-cols-2 gap-2 pt-1">
                   {rag.evidence_images.map((ev, i) => (
@@ -242,7 +244,7 @@ export function MessageBubble({ message, onSelectOption }: Props) {
             {rag.citations && rag.citations.length > 0 && (
               <div className="space-y-1">
                 <p className="text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider">
-                  Source Citations
+                  {t("Source Citations")}
                 </p>
                 <div className="flex flex-wrap gap-1.5">
                   {rag.citations.map((citation, i) => (
@@ -262,7 +264,7 @@ export function MessageBubble({ message, onSelectOption }: Props) {
                   className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-1.5 text-xs font-semibold text-[var(--color-text)] hover:bg-neutral-50 dark:hover:bg-neutral-700 transition shadow-xs"
                 >
                   <Download className="h-3.5 w-3.5 text-blue-600" />
-                  Download PDF Report
+                  {t("Download PDF Report")}
                 </a>
                 <a
                   href={rag.report_html_url || `/api/reports/${rag.report_id || "CURRENT"}/html`}
@@ -271,7 +273,7 @@ export function MessageBubble({ message, onSelectOption }: Props) {
                   className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-1.5 text-xs font-semibold text-[var(--color-text)] hover:bg-neutral-50 dark:hover:bg-neutral-700 transition shadow-xs"
                 >
                   <ExternalLink className="h-3.5 w-3.5 text-emerald-600" />
-                  View HTML Report
+                  {t("View HTML Report")}
                 </a>
               </div>
             )}

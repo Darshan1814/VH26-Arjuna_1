@@ -184,6 +184,54 @@ FALLBACK_DICTIONARY: Dict[str, Dict[str, str]] = {
 }
 
 
+import json
+import os
+from app.core.config import settings
+
+LANGUAGE_NAMES: Dict[str, str] = {
+    "hi": "Hindi", "mr": "Marathi", "bn": "Bengali", "te": "Telugu", "ta": "Tamil",
+    "gu": "Gujarati", "kn": "Kannada", "ml": "Malayalam", "pa": "Punjabi", "or": "Odia",
+    "as": "Assamese", "ur": "Urdu", "sa": "Sanskrit", "ne": "Nepali", "kok": "Konkani",
+    "es": "Spanish", "fr": "French", "de": "German", "it": "Italian", "pt": "Portuguese",
+    "ru": "Russian", "zh": "Chinese (Simplified)", "zh-tw": "Chinese (Traditional)",
+    "ja": "Japanese", "ko": "Korean", "ar": "Arabic", "nl": "Dutch", "tr": "Turkish",
+    "pl": "Polish", "sv": "Swedish", "id": "Indonesian", "vi": "Vietnamese", "th": "Thai",
+    "el": "Greek", "cs": "Czech", "da": "Danish", "fi": "Finnish", "no": "Norwegian",
+    "hu": "Hungarian", "ro": "Romanian", "uk": "Ukrainian", "he": "Hebrew", "fa": "Persian",
+    "ms": "Malay", "tl": "Filipino", "sk": "Slovak", "bg": "Bulgarian", "hr": "Croatian",
+    "sr": "Serbian", "lt": "Lithuanian", "sl": "Slovenian", "lv": "Latvian", "et": "Estonian",
+    "ga": "Irish", "is": "Icelandic", "sw": "Swahili", "af": "Afrikaans", "sq": "Albanian",
+    "hy": "Armenian", "az": "Azerbaijani", "eu": "Basque", "be": "Belarusian", "bs": "Bosnian",
+    "ca": "Catalan", "ka": "Georgian", "kk": "Kazakh", "mk": "Macedonian", "mn": "Mongolian",
+    "uz": "Uzbek", "en": "English"
+}
+
+CACHE_FILE = os.path.join(settings.MANUALS_DIR, "translations_cache.json")
+
+def load_disk_cache():
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                for k, v in data.items():
+                    parts = k.split(":::")
+                    if len(parts) == 3:
+                        TRANSLATION_CACHE[(parts[0], parts[1], parts[2])] = v
+        except Exception as e:
+            logger.warning(f"Could not load disk translation cache: {e}")
+
+def save_disk_cache():
+    try:
+        os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
+        serializable = {f"{k[0]}:::{k[1]}:::{k[2]}": v for k, v in TRANSLATION_CACHE.items()}
+        with open(CACHE_FILE, "w", encoding="utf-8") as f:
+            json.dump(serializable, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        logger.warning(f"Could not save disk translation cache: {e}")
+
+load_disk_cache()
+
+
 class TranslateRequest(BaseModel):
     q: Union[str, List[str]] = Field(..., description="Text or list of texts to translate")
     source: str = Field(default="en", description="Source language code (e.g. 'en')")
@@ -197,8 +245,44 @@ class TranslateResponse(BaseModel):
     provider: str
 
 
+def translate_with_groq_batch(texts: List[str], source: str, target: str) -> List[str]:
+    """Translate a list of strings using the Groq LLM inference engine with structured key-value mapping."""
+    if not texts:
+        return []
+    lang_name = LANGUAGE_NAMES.get(target.lower(), target)
+    indexed_input = {str(i): text for i, text in enumerate(texts)}
+    try:
+        from app.services.llm.openai_client import get_openai_client
+        client = get_openai_client()
+        prompt = (
+            f"You are a professional industrial UI translator.\n"
+            f"Translate each text value from English into {lang_name} ({target}).\n"
+            f"CRITICAL RULES:\n"
+            f"1. Preserve error codes (e.g. E101), machine models (e.g. RC10, CNC-X100), technical numbers, and units.\n"
+            f"2. Return a valid JSON object mapping each index key ('0', '1', ...) directly to its translated string.\n\n"
+            f"Input:\n{json.dumps(indexed_input, ensure_ascii=False)}"
+        )
+        res = client.json_completion([{"role": "user", "content": prompt}])
+        if isinstance(res, dict):
+            data = res.get("translations", res) if isinstance(res.get("translations"), dict) else res
+            translated_list = []
+            for i, orig in enumerate(texts):
+                val = data.get(str(i)) or data.get(i)
+                if val and isinstance(val, str) and val.strip():
+                    translated_list.append(val.strip())
+                else:
+                    fallback = FALLBACK_DICTIONARY.get(target.lower(), {}).get(orig, orig)
+                    translated_list.append(fallback)
+            return translated_list
+    except Exception as e:
+        logger.error(f"Groq batch translation failed: {e}")
+
+    lang_dict = FALLBACK_DICTIONARY.get(target.lower(), {})
+    return [lang_dict.get(t, t) for t in texts]
+
+
 async def call_deep_translate_api(text: str, source: str, target: str) -> str:
-    """Call Deep Translate RapidAPI for a single text string."""
+    """Call Deep Translate RapidAPI, with automatic Groq LLM fallback."""
     headers = {
         "Content-Type": "application/json",
         "x-rapidapi-host": RAPIDAPI_HOST,
@@ -207,7 +291,7 @@ async def call_deep_translate_api(text: str, source: str, target: str) -> str:
     payload = {"q": text, "source": source, "target": target}
 
     try:
-        async with httpx.AsyncClient(timeout=8.0) as client:
+        async with httpx.AsyncClient(timeout=4.0) as client:
             resp = await client.post(RAPIDAPI_URL, headers=headers, json=payload)
             if resp.status_code == 200:
                 data = resp.json()
@@ -218,19 +302,17 @@ async def call_deep_translate_api(text: str, source: str, target: str) -> str:
                 )
                 if translated:
                     return str(translated)
-            else:
-                logger.warning(
-                    f"Deep Translate API returned {resp.status_code}: {resp.text}"
-                )
-    except Exception as e:
-        logger.warning(f"Deep Translate API request failed: {e}")
+    except Exception:
+        pass
 
     # Fallback to local dictionary
     lang_dict = FALLBACK_DICTIONARY.get(target.lower(), {})
     if text in lang_dict:
         return lang_dict[text]
 
-    return text
+    # Seamless high-accuracy Groq fallback
+    groq_res = translate_with_groq_batch([text], source, target)
+    return groq_res[0] if groq_res else text
 
 
 @router.post("", response_model=TranslateResponse)
@@ -244,6 +326,7 @@ async def translate_text(req: TranslateRequest):
             provider="identity",
         )
 
+    # Single string translation
     if isinstance(req.q, str):
         cache_key = (req.q, req.source.lower(), req.target.lower())
         if cache_key in TRANSLATION_CACHE:
@@ -255,28 +338,54 @@ async def translate_text(req: TranslateRequest):
             )
 
         translated = await call_deep_translate_api(req.q, req.source, req.target)
-        TRANSLATION_CACHE[cache_key] = translated
+        if translated and translated.strip() != req.q.strip():
+            TRANSLATION_CACHE[cache_key] = translated
+            save_disk_cache()
         return TranslateResponse(
             translated_text=translated,
             source=req.source,
             target=req.target,
-            provider="rapidapi",
+            provider="groq_or_api",
         )
 
-    # Batch translation for list of strings
-    results: List[str] = []
-    for item in req.q:
-        cache_key = (item, req.source.lower(), req.target.lower())
+    # Batch translation
+    source_lower = req.source.lower()
+    target_lower = req.target.lower()
+    results: List[str] = [""] * len(req.q)
+    uncached_indices: List[int] = []
+    uncached_texts: List[str] = []
+
+    # 1. Fill from cache and local dictionary
+    lang_dict = FALLBACK_DICTIONARY.get(target_lower, {})
+    for idx, item in enumerate(req.q):
+        cache_key = (item, source_lower, target_lower)
         if cache_key in TRANSLATION_CACHE:
-            results.append(TRANSLATION_CACHE[cache_key])
+            results[idx] = TRANSLATION_CACHE[cache_key]
+        elif item in lang_dict:
+            results[idx] = lang_dict[item]
+            TRANSLATION_CACHE[cache_key] = lang_dict[item]
         else:
-            translated = await call_deep_translate_api(item, req.source, req.target)
-            TRANSLATION_CACHE[cache_key] = translated
-            results.append(translated)
+            uncached_indices.append(idx)
+            uncached_texts.append(item)
+
+    # 2. Batch-translate uncached items via Groq in chunks of 35
+    if uncached_texts:
+        CHUNK_SIZE = 35
+        for i in range(0, len(uncached_texts), CHUNK_SIZE):
+            chunk_texts = uncached_texts[i:i + CHUNK_SIZE]
+            chunk_indices = uncached_indices[i:i + CHUNK_SIZE]
+            translated_chunk = translate_with_groq_batch(chunk_texts, req.source, req.target)
+            for orig_idx, orig_text, trans_text in zip(chunk_indices, chunk_texts, translated_chunk):
+                results[orig_idx] = trans_text
+                # Only cache if actually translated to avoid poisoning cache with raw English
+                if trans_text and trans_text.strip() != orig_text.strip():
+                    TRANSLATION_CACHE[(orig_text, source_lower, target_lower)] = trans_text
+
+        save_disk_cache()
 
     return TranslateResponse(
         translated_text=results,
         source=req.source,
         target=req.target,
-        provider="rapidapi_batch",
+        provider="groq_batch",
     )
