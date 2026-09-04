@@ -1,7 +1,6 @@
-"""Structured RAG response schema with citations, confidence, and ambiguity state."""
+"""Structured RAG response schema with ranked solutions, citations, and evidence."""
 
-from typing import Optional
-
+from typing import Any, Optional
 from pydantic import BaseModel
 
 
@@ -14,16 +13,41 @@ class Citation(BaseModel):
     page: Optional[int] = None
     chunk_id: Optional[str] = None
     relevance_score: Optional[float] = None
+    source_type: Optional[str] = "pdf"
+    file_name: Optional[str] = None
+    evidence_image_url: Optional[str] = None
+
+
+class RecommendedSolution(BaseModel):
+    """Prioritized technical recommendation with supporting evidence."""
+
+    priority: int = 1
+    action: str
+    reason: str
+    evidence_strength: str = "Strong"
+    source: str = "Manual Excerpt"
+    is_verified: bool = True
 
 
 class RAGResponse(BaseModel):
-    """Full structured response from the RAG pipeline."""
+    """Full structured response from the industrial RAG pipeline."""
 
+    problem: Optional[str] = None
+    diagnosis: Optional[str] = None
     answer: str
     probable_causes: list[str] = []
     corrective_steps: list[str] = []
+    recommended_solutions: list[RecommendedSolution] = []
+    safety_warnings: list[str] = []
+
+    # Confidence scoring
     confidence: float = 0.0
+    confidence_level: str = "MEDIUM"  # HIGH, MEDIUM, LOW
+    confidence_reasons: list[str] = []
+
+    # Traceable citations
     citations: list[Citation] = []
+    evidence_images: list[dict[str, Any]] = []
 
     # State flags for the frontend
     is_ambiguous: bool = False
@@ -36,7 +60,10 @@ class RAGResponse(BaseModel):
     # Query metadata
     detected_error_code: Optional[str] = None
     detected_machine: Optional[str] = None
-    query_type: Optional[str] = None  # "error_code", "natural_language", "machine_specific"
+    query_type: Optional[str] = None
 
-    # Conversation context
+    # Conversation context & reporting
     conversation_id: Optional[str] = None
+    report_id: Optional[str] = None
+    report_pdf_url: Optional[str] = None
+    report_html_url: Optional[str] = None

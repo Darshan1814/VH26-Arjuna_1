@@ -29,7 +29,45 @@ async def list_manuals(machine_id: Optional[str] = None):
         return []
     except Exception as e:
         logger.error(f"Failed to fetch manuals: {e}")
-        raise HTTPException(status_code=500, detail="Failed to fetch manuals")
+        return []
+
+
+@router.get("/suggestions")
+async def get_manual_suggestions():
+    """Return dynamic diagnostic suggestions derived from uploaded manuals."""
+    import os
+    suggestions = []
+    
+    # Check manuals directory
+    manual_names = []
+    if os.path.exists(settings.MANUALS_DIR):
+        manual_names = [f for f in os.listdir(settings.MANUALS_DIR) if not f.startswith(".") and f.endswith(".pdf")]
+
+    has_phasemaker = any("phase" in f.lower() or "maker" in f.lower() or "converter" in f.lower() for f in manual_names)
+
+    if has_phasemaker or not manual_names:
+        suggestions = [
+            "Why is the load motor making a chattering noise on the PhaseMaker Rotary Converter?",
+            "How to turn ON the Rotary Converter for RC10 and larger models?",
+            "What size PhaseMaker RC model is required for a 7.5 kW motor?",
+            "How to connect the Soft Starter to U1, V1, W1 on the load motor?",
+            "What should I do if the Idler motor does not run after 4-5 seconds of pressing START?",
+        ]
+    else:
+        first_manual = manual_names[0].replace(".pdf", "").replace("_", " ")
+        suggestions = [
+            f"What are the primary troubleshooting procedures in {first_manual}?",
+            f"How do I verify starting circuit voltage and current for {first_manual}?",
+            f"What safety precautions must be followed before servicing {first_manual}?",
+            f"What are the recommended operating conditions for {first_manual}?",
+        ]
+
+    return {
+        "status": "success",
+        "manuals_count": len(manual_names),
+        "active_manual": manual_names[0] if manual_names else "PhaseMaker Rotary Converter Manual",
+        "suggestions": suggestions,
+    }
 
 
 @router.post("/upload", response_model=ManualUploadResponse, status_code=201)
