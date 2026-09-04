@@ -253,6 +253,10 @@ pipeline {
                         echo "Verifying cluster connectivity (KUBECONFIG=\${KUBECONFIG:-default})..."
                         kubectl cluster-info || true
 
+                        echo "Pre-deploy: Checking node resources..."
+                        kubectl top nodes 2>/dev/null || true
+                        kubectl describe nodes | grep -A 5 "Allocated resources" || true
+
                         echo "Upgrading or Installing Helm Release '${HELM_RELEASE}'..."
                         helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
                             --namespace ${K8S_NAMESPACE} \
@@ -267,8 +271,24 @@ pipeline {
                             --set secrets.supabaseUrl="${SUPABASE_URL}" \
                             --set secrets.supabaseKey="${SUPABASE_KEY}" \
                             --set secrets.supabaseServiceRoleKey="${SUPABASE_SERVICE_ROLE_KEY}" \
-                            --timeout 10m \
-                            --wait
+                            --timeout 15m \
+                            --atomic \
+                            --force \
+                            --cleanup-on-fail || {
+                                echo "=== HELM DEPLOY FAILED - GATHERING DIAGNOSTICS ==="
+                                echo "--- Pod Status ---"
+                                kubectl get pods -n ${K8S_NAMESPACE} -o wide 2>/dev/null || true
+                                echo "--- Pod Events ---"
+                                kubectl get events -n ${K8S_NAMESPACE} --sort-by='.lastTimestamp' 2>/dev/null | tail -30 || true
+                                echo "--- Describe Failing Pods ---"
+                                for pod in \$(kubectl get pods -n ${K8S_NAMESPACE} --field-selector=status.phase!=Running -o name 2>/dev/null); do
+                                    echo "=== \$pod ==="
+                                    kubectl describe \$pod -n ${K8S_NAMESPACE} 2>/dev/null | tail -20 || true
+                                done
+                                echo "--- Node Resources ---"
+                                kubectl describe nodes 2>/dev/null | grep -A 10 "Allocated resources" || true
+                                exit 1
+                            }
                     """
                 }
             }

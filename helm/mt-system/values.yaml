@@ -13,7 +13,7 @@ imageCredentials:
 
 # -- Backend Configuration --
 backend:
-  replicaCount: 2
+  replicaCount: 1
   image:
     repository: darshan11111/mt-backend
     tag: "latest"
@@ -23,28 +23,30 @@ backend:
     port: 8000
   resources:
     requests:
-      cpu: 500m
-      memory: 1Gi
+      cpu: 250m
+      memory: 512Mi
     limits:
       cpu: "1"
-      memory: 2Gi
+      memory: 1536Mi
   hpa:
     enabled: true
-    minReplicas: 2
-    maxReplicas: 6
-    targetCPUUtilizationPercentage: 70
-    targetMemoryUtilizationPercentage: 80
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 75
+    targetMemoryUtilizationPercentage: 85
   probes:
     liveness:
       path: /health
-      initialDelaySeconds: 60
+      initialDelaySeconds: 90
       periodSeconds: 30
-      timeoutSeconds: 10
+      timeoutSeconds: 15
+      failureThreshold: 5
     readiness:
       path: /health
-      initialDelaySeconds: 30
+      initialDelaySeconds: 45
       periodSeconds: 10
-      timeoutSeconds: 5
+      timeoutSeconds: 10
+      failureThreshold: 5
   env:
     BACKEND_HOST: "0.0.0.0"
     BACKEND_PORT: "8000"
@@ -56,7 +58,7 @@ backend:
 
 # -- Frontend Configuration --
 frontend:
-  replicaCount: 2
+  replicaCount: 1
   image:
     repository: darshan11111/mt-frontend
     tag: "latest"
@@ -66,15 +68,15 @@ frontend:
     port: 3000
   resources:
     requests:
-      cpu: 200m
-      memory: 256Mi
+      cpu: 100m
+      memory: 128Mi
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 300m
+      memory: 384Mi
   hpa:
     enabled: true
-    minReplicas: 2
-    maxReplicas: 4
+    minReplicas: 1
+    maxReplicas: 3
     targetCPUUtilizationPercentage: 80
   probes:
     liveness:
@@ -112,7 +114,7 @@ persistence:
   enabled: true
   storageClass: ""
   accessMode: ReadWriteOnce
-  size: 5Gi
+  size: 2Gi
 
 # -- Observability & Monitoring (Prometheus + Grafana) --
 monitoring:

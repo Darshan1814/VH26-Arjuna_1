@@ -84,6 +84,7 @@ spec:
             initialDelaySeconds: {{ .Values.backend.probes.liveness.initialDelaySeconds }}
             periodSeconds: {{ .Values.backend.probes.liveness.periodSeconds }}
             timeoutSeconds: {{ .Values.backend.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.backend.probes.liveness.failureThreshold | default 3 }}
           readinessProbe:
             httpGet:
               path: {{ .Values.backend.probes.readiness.path }}
@@ -91,6 +92,7 @@ spec:
             initialDelaySeconds: {{ .Values.backend.probes.readiness.initialDelaySeconds }}
             periodSeconds: {{ .Values.backend.probes.readiness.periodSeconds }}
             timeoutSeconds: {{ .Values.backend.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.backend.probes.readiness.failureThreshold | default 3 }}
           volumeMounts:
             {{- if .Values.persistence.enabled }}
             - name: model-cache
