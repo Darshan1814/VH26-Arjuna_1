@@ -315,6 +315,38 @@ class SQLiteStorage:
                 return str(row["html_content"])
         return None
 
+    def list_reports(self, limit: int = 50) -> list[dict[str, Any]]:
+        """List recently generated reports from SQLite."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT report_id, session_id, title, query, machine_model, error_code,
+                       confidence_level, (pdf_data IS NOT NULL) as has_pdf,
+                       (html_content IS NOT NULL) as has_html, created_at
+                FROM reports ORDER BY created_at DESC LIMIT ?
+                """,
+                (limit,),
+            )
+            rows = cursor.fetchall()
+            return [
+                {
+                    "report_id": row["report_id"],
+                    "session_id": row["session_id"],
+                    "title": row["title"],
+                    "query": row["query"],
+                    "machine_model": row["machine_model"],
+                    "error_code": row["error_code"],
+                    "confidence_level": row["confidence_level"],
+                    "has_pdf": bool(row["has_pdf"]),
+                    "has_html": bool(row["has_html"]),
+                    "pdf_url": f"/api/reports/{row['report_id']}/pdf",
+                    "html_url": f"/api/reports/{row['report_id']}/html",
+                    "created_at": row["created_at"],
+                }
+                for row in rows
+            ]
+
 
 # Global singleton instance
 _sqlite_storage: Optional[SQLiteStorage] = None

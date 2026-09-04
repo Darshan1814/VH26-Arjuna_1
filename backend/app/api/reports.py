@@ -153,6 +153,14 @@ async def view_html_report(report_id: str):
     return HTMLResponse(content=html_content)
 
 
+@router.get("/list")
+@router.get("")
+async def list_reports(limit: int = 50):
+    """List recent troubleshooting reports from SQLite storage."""
+    sqlite_storage = get_sqlite_storage()
+    return {"reports": sqlite_storage.list_reports(limit=limit)}
+
+
 @router.get("/{report_id}")
 async def get_report_meta(report_id: str):
     """Get metadata for a generated report from SQLite."""

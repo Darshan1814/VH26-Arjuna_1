@@ -58,3 +58,6 @@ manuals/*.pdf
 # === Misc ===
 *.log
 tmp/
+*.tsbuildinfo
+*.chunks.json
+manuals/*.chunks.json
