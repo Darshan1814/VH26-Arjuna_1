@@ -127,7 +127,9 @@ class OpenAIClient:
                     break
 
         logger.error(f"All model candidates failed. Last error: {last_err}")
-        raise last_err
+        if last_err is not None:
+            raise last_err
+        raise RuntimeError("All LLM model candidates failed or no candidates available.")
 
     def json_completion(
         self,

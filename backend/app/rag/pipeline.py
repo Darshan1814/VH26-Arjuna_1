@@ -1,5 +1,6 @@
 """Orchestrates the complete industrial RAG troubleshooting pipeline."""
 
+import json
 import os
 import uuid
 import logging
