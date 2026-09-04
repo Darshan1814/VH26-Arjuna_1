@@ -102,6 +102,7 @@ async def upload_knowledge(
                             "section": c["section"],
                             "chunk_index": c["chunk_index"],
                             "content": c["content"],
+                            "content_type": c.get("content_type", "text"),
                             "error_codes": c["error_codes"],
                             "metadata": {
                                 **c["metadata"],

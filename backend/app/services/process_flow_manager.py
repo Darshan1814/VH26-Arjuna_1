@@ -7,6 +7,7 @@ from typing import Any, Optional
 
 from app.core.config import settings
 from app.core.database import get_supabase_client
+from app.core.sqlite_storage import get_sqlite_storage
 from app.services.chunking.semantic_chunker import SemanticChunker
 from app.services.citations.evidence_highlighter import EvidenceHighlighter
 from app.services.disambiguation.machine_disambiguator import MachineDisambiguator
@@ -32,6 +33,7 @@ class ProcessFlowSession:
     def __init__(self, session_id: str) -> None:
         self.session_id = session_id
         self.files: list[dict[str, Any]] = []
+        self.cancelled_files: set[str] = set()
         self.normalized_docs: list[NormalizedDocument] = []
         self.chunks: list[dict[str, Any]] = []
         self.query: Optional[str] = None
@@ -74,13 +76,22 @@ class ProcessFlowManager:
                 if os.path.isfile(fpath) and not fname.startswith(".") and fname.lower().endswith(
                     (".pdf", ".docx", ".png", ".jpg", ".jpeg", ".csv", ".log", ".txt")
                 ):
+                    display_name = fname
+                    for prefix in ["FLOW-XULLQP_", "FLOW-"]:
+                        if display_name.startswith(prefix):
+                            display_name = display_name[len(prefix):]
+
+                    # Respect user cancellation: do not auto-preload files user cancelled
+                    if (
+                        fname in session.cancelled_files
+                        or display_name in session.cancelled_files
+                        or any(c in fname or c in display_name for c in session.cancelled_files)
+                    ):
+                        continue
+
                     try:
                         with open(fpath, "rb") as mf:
                             fbytes = mf.read()
-                        display_name = fname
-                        for prefix in ["FLOW-XULLQP_", "FLOW-"]:
-                            if display_name.startswith(prefix):
-                                display_name = display_name[len(prefix):]
                         session.files.append({
                             "name": display_name,
                             "path": fpath,
@@ -104,6 +115,14 @@ class ProcessFlowManager:
 
     def add_file(self, session_id: str, file_name: str, file_bytes: bytes) -> dict[str, Any]:
         session = self.get_or_create_session(session_id)
+        # 1. Store inside SQLite database (zero disk dependency)
+        get_sqlite_storage().save_document(
+            filename=file_name,
+            file_bytes=file_bytes,
+            session_id=session_id,
+            content_type="application/pdf" if file_name.lower().endswith(".pdf") else "text/plain",
+        )
+
         file_path = os.path.join(settings.MANUALS_DIR, f"{session_id}_{file_name}")
         with open(file_path, "wb") as f:
             f.write(file_bytes)
@@ -117,7 +136,47 @@ class ProcessFlowManager:
         # Avoid duplicate entries
         session.files = [f for f in session.files if f["name"] != file_name]
         session.files.insert(0, file_meta)
+        session.cancelled_files.discard(file_name)
+        session.cancelled_files.discard(os.path.basename(file_name))
         return {"file_name": file_name, "size": len(file_bytes), "total_files": len(session.files)}
+
+    def remove_file(self, session_id: str, file_name: str) -> bool:
+        """Cancel and remove an uploaded document from session and SQLite."""
+        session = self.get_or_create_session(session_id)
+        initial_len = len(session.files)
+        # Record user cancellation to prevent re-preload
+        session.cancelled_files.add(file_name)
+        session.cancelled_files.add(os.path.basename(file_name))
+        for prefix in ["FLOW-XULLQP_", "FLOW-"]:
+            session.cancelled_files.add(f"{prefix}{file_name}")
+
+        # Filter out matching filename
+        session.files = [
+            f for f in session.files
+            if f["name"] != file_name and os.path.basename(f["name"]) != os.path.basename(file_name)
+        ]
+        # Remove from SQLite database
+        get_sqlite_storage().delete_document(filename=file_name, session_id=session_id)
+
+        # Remove from disk if present
+        disk_path = os.path.join(settings.MANUALS_DIR, f"{session_id}_{file_name}")
+        if os.path.exists(disk_path):
+            try:
+                os.remove(disk_path)
+            except Exception:
+                pass
+
+        # Clear normalized docs and chunks cache so downstream steps refresh accurately
+        session.normalized_docs = [
+            d for d in session.normalized_docs
+            if getattr(d, "source_file", "") != file_name and os.path.basename(getattr(d, "source_file", "")) != os.path.basename(file_name)
+        ]
+        session.chunks = []
+        session.retrieved_chunks = []
+        session.reranked_chunks = []
+        session.step_data = {}
+        logger.info(f"Session {session_id}: removed document {file_name} (remaining: {len(session.files)})")
+        return len(session.files) < initial_len
 
     async def execute_step(
         self,
@@ -648,13 +707,40 @@ Respond ONLY in valid JSON:
             }
 
             try:
-                pdf_file = PDFReportGenerator.generate(report_payload, f"report_{report_id}.pdf")
+                pdf_bytes = PDFReportGenerator.generate_bytes(report_payload)
                 html_content = HTMLReportGenerator.generate(report_payload)
-                html_file = os.path.join(settings.REPORTS_DIR, f"report_{report_id}.html")
-                with open(html_file, "w", encoding="utf-8") as f:
-                    f.write(html_content)
+                # Store report inside SQLite database (zero files inside code repository)
+                get_sqlite_storage().save_report(
+                    report_data=report_payload,
+                    pdf_bytes=pdf_bytes,
+                    html_content=html_content,
+                    session_id=session_id,
+                )
+
+                # Synchronize to Supabase reports table with exact matching schema columns
+                try:
+                    client = get_supabase_client()
+                    client.table("reports").insert({
+                        "title": f"Diagnostic Report - {machine} {err_code or ''}".strip(),
+                        "query": query,
+                        "machine_model": machine,
+                        "error_code": err_code,
+                        "diagnosis": report_payload["diagnosis"],
+                        "probable_causes": report_payload["probable_causes"],
+                        "recommended_solutions": ranked_solutions,
+                        "confidence": report_payload["confidence"],
+                        "confidence_level": report_payload["confidence_level"],
+                        "evidence": evidence_images,
+                        "html_content": html_content,
+                        "pdf_path": f"/api/reports/{report_id}/pdf",
+                        "metadata": {"report_id": report_id, "session_id": session_id, "storage": "sqlite3"},
+                    }).execute()
+                    logger.info(f"Synchronized report {report_id} to Supabase reports table")
+                except Exception as sb_err:
+                    logger.warning(f"Could not persist report to Supabase (using SQLite fallback): {sb_err}")
+
             except Exception as r_err:
-                logger.warning(f"Report file creation error: {r_err}")
+                logger.warning(f"Report persistence error: {r_err}")
 
             final_data = {
                 "report_id": report_id,

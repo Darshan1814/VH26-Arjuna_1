@@ -24,6 +24,8 @@ from reportlab.pdfgen import canvas
 
 from app.core.config import settings
 
+import io
+
 logger = logging.getLogger(__name__)
 
 
@@ -67,14 +69,32 @@ class NumberedCanvas(canvas.Canvas):
 
 
 class PDFReportGenerator:
-    """Generates structured, professional monochrome PDF troubleshooting reports."""
+    """Generates structured, professional monochrome PDF troubleshooting reports in-memory or on disk."""
 
-    @staticmethod
+    @classmethod
+    def generate_bytes(cls, report_data: dict[str, Any]) -> bytes:
+        """Build and return in-memory binary PDF bytes without writing to disk."""
+        buffer = io.BytesIO()
+        doc = SimpleDocTemplate(
+            buffer,
+            pagesize=letter,
+            leftMargin=54,
+            rightMargin=54,
+            topMargin=54,
+            bottomMargin=54,
+        )
+        story = cls._build_story(report_data)
+        doc.build(story, canvasmaker=NumberedCanvas)
+        buffer.seek(0)
+        return buffer.getvalue()
+
+    @classmethod
     def generate(
+        cls,
         report_data: dict[str, Any],
         output_filename: Optional[str] = None,
     ) -> str:
-        """Build and save a professional PDF troubleshooting report."""
+        """Build and save PDF troubleshooting report to disk (fallback)."""
         report_id = report_data.get("report_id") or str(uuid.uuid4())[:8].upper()
         if not output_filename:
             output_filename = f"report_{report_id}.pdf"
@@ -82,15 +102,17 @@ class PDFReportGenerator:
         pdf_path = os.path.join(settings.REPORTS_DIR, output_filename)
         os.makedirs(settings.REPORTS_DIR, exist_ok=True)
 
-        doc = SimpleDocTemplate(
-            pdf_path,
-            pagesize=letter,
-            leftMargin=54,
-            rightMargin=54,
-            topMargin=54,
-            bottomMargin=54,
-        )
+        pdf_bytes = cls.generate_bytes(report_data)
+        with open(pdf_path, "wb") as f:
+            f.write(pdf_bytes)
 
+        logger.info(f"Generated PDF troubleshooting report at: {pdf_path}")
+        return pdf_path
+
+    @classmethod
+    def _build_story(cls, report_data: dict[str, Any]) -> list:
+        """Construct the Platypus flowable story for the report."""
+        report_id = report_data.get("report_id") or str(uuid.uuid4())[:8].upper()
         styles = getSampleStyleSheet()
         
         # Custom clean engineering typography styles
@@ -310,8 +332,4 @@ class PDFReportGenerator:
             ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
         ]))
         story.append(trace_table)
-
-        # Build document with NumberedCanvas for header/footer
-        doc.build(story, canvasmaker=NumberedCanvas)
-        logger.info(f"Generated PDF troubleshooting report at: {pdf_path}")
-        return pdf_path
+        return story

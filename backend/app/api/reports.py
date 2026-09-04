@@ -5,11 +5,12 @@ import uuid
 import logging
 from typing import Any, Optional
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse, HTMLResponse
+from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.database import get_supabase_client
+from app.core.sqlite_storage import get_sqlite_storage
 from app.services.reports.pdf_generator import PDFReportGenerator
 from app.services.reports.html_generator import HTMLReportGenerator
 
@@ -33,10 +34,9 @@ class GenerateReportRequest(BaseModel):
 
 @router.post("/generate")
 async def generate_report(request: GenerateReportRequest):
-    """Generate professional PDF and HTML reports from diagnosis results."""
+    """Generate professional PDF and HTML reports and persist inside SQLite & Supabase."""
     report_id = str(uuid.uuid4())[:8].upper()
-    filename = f"report_{report_id}.pdf"
-    html_filename = f"report_{report_id}.html"
+    sqlite_storage = get_sqlite_storage()
 
     payload = {
         "report_id": report_id,
@@ -54,16 +54,20 @@ async def generate_report(request: GenerateReportRequest):
     }
 
     try:
-        # Generate PDF
-        pdf_path = PDFReportGenerator.generate(payload, filename)
+        # 1. Generate PDF in-memory (bytes)
+        pdf_bytes = PDFReportGenerator.generate_bytes(payload)
 
-        # Generate HTML
+        # 2. Generate HTML content string
         html_content = HTMLReportGenerator.generate(payload)
-        html_path = os.path.join(settings.REPORTS_DIR, html_filename)
-        with open(html_path, "w", encoding="utf-8") as f:
-            f.write(html_content)
 
-        # Save record in Supabase if reachable
+        # 3. Store in SQLite database (zero disk clutter in repo)
+        sqlite_storage.save_report(
+            report_data=payload,
+            pdf_bytes=pdf_bytes,
+            html_content=html_content,
+        )
+
+        # 4. Save record in Supabase if accessible
         try:
             client = get_supabase_client()
             client.table("reports").insert({
@@ -78,11 +82,12 @@ async def generate_report(request: GenerateReportRequest):
                 "confidence_level": request.confidence_level,
                 "evidence": request.evidence_images,
                 "html_content": html_content,
-                "pdf_path": pdf_path,
-                "metadata": {"report_id": report_id},
+                "pdf_path": f"/api/reports/{report_id}/pdf",
+                "metadata": {"report_id": report_id, "storage": "sqlite3"},
             }).execute()
+            logger.info(f"Synchronized report {report_id} to Supabase reports table")
         except Exception as db_err:
-            logger.warning(f"Could not persist report to database: {db_err}")
+            logger.warning(f"Could not persist report to Supabase (using SQLite fallback): {db_err}")
 
         return {
             "status": "success",
@@ -99,49 +104,75 @@ async def generate_report(request: GenerateReportRequest):
 
 @router.get("/{report_id}/pdf")
 async def download_pdf_report(report_id: str):
-    """Download the generated black-and-white PDF report."""
+    """Download the generated black-and-white PDF report from SQLite storage."""
     safe_id = os.path.basename(report_id)
-    pdf_path = os.path.join(settings.REPORTS_DIR, f"report_{safe_id}.pdf")
+    sqlite_storage = get_sqlite_storage()
 
-    if not os.path.exists(pdf_path):
-        raise HTTPException(status_code=404, detail="PDF report not found")
+    # 1. Fetch binary PDF from SQLite
+    pdf_bytes = sqlite_storage.get_report_pdf(safe_id)
 
-    return FileResponse(
-        pdf_path,
+    # 2. Fallback check for legacy file on disk if exists
+    if not pdf_bytes:
+        disk_pdf = os.path.join(settings.REPORTS_DIR, f"report_{safe_id}.pdf")
+        if os.path.exists(disk_pdf):
+            with open(disk_pdf, "rb") as pf:
+                pdf_bytes = pf.read()
+
+    if not pdf_bytes:
+        raise HTTPException(status_code=404, detail="PDF report not found in SQLite database")
+
+    return Response(
+        content=pdf_bytes,
         media_type="application/pdf",
-        filename=f"Diagnostic_Report_{safe_id}.pdf",
+        headers={
+            "Content-Disposition": f"inline; filename=Diagnostic_Report_{safe_id}.pdf",
+            "Content-Type": "application/pdf",
+        },
     )
 
 
 @router.get("/{report_id}/html", response_class=HTMLResponse)
 async def view_html_report(report_id: str):
-    """View the interactive HTML report."""
+    """View the interactive HTML report from SQLite storage."""
     safe_id = os.path.basename(report_id)
-    html_path = os.path.join(settings.REPORTS_DIR, f"report_{safe_id}.html")
+    sqlite_storage = get_sqlite_storage()
 
-    if not os.path.exists(html_path):
-        raise HTTPException(status_code=404, detail="HTML report not found")
+    # 1. Fetch HTML string from SQLite
+    html_content = sqlite_storage.get_report_html(safe_id)
 
-    with open(html_path, "r", encoding="utf-8") as f:
-        content = f.read()
+    # 2. Fallback check for legacy file on disk if exists
+    if not html_content:
+        disk_html = os.path.join(settings.REPORTS_DIR, f"report_{safe_id}.html")
+        if os.path.exists(disk_html):
+            with open(disk_html, "r", encoding="utf-8") as hf:
+                html_content = hf.read()
 
-    return HTMLResponse(content=content)
+    if not html_content:
+        raise HTTPException(status_code=404, detail="HTML report not found in SQLite database")
+
+    return HTMLResponse(content=html_content)
 
 
 @router.get("/{report_id}")
 async def get_report_meta(report_id: str):
-    """Get metadata for a generated report."""
+    """Get metadata for a generated report from SQLite."""
     safe_id = os.path.basename(report_id)
-    pdf_path = os.path.join(settings.REPORTS_DIR, f"report_{safe_id}.pdf")
-    html_path = os.path.join(settings.REPORTS_DIR, f"report_{safe_id}.html")
+    sqlite_storage = get_sqlite_storage()
 
-    if not os.path.exists(pdf_path) and not os.path.exists(html_path):
-        raise HTTPException(status_code=404, detail="Report not found")
+    meta = sqlite_storage.get_report_meta(safe_id)
+    if meta:
+        return meta
 
-    return {
-        "report_id": safe_id,
-        "has_pdf": os.path.exists(pdf_path),
-        "has_html": os.path.exists(html_path),
-        "pdf_url": f"/api/reports/{safe_id}/pdf",
-        "html_url": f"/api/reports/{safe_id}/html",
-    }
+    # Fallback to disk if legacy
+    disk_pdf = os.path.join(settings.REPORTS_DIR, f"report_{safe_id}.pdf")
+    disk_html = os.path.join(settings.REPORTS_DIR, f"report_{safe_id}.html")
+    if os.path.exists(disk_pdf) or os.path.exists(disk_html):
+        return {
+            "report_id": safe_id,
+            "has_pdf": os.path.exists(disk_pdf),
+            "has_html": os.path.exists(disk_html),
+            "pdf_url": f"/api/reports/{safe_id}/pdf",
+            "html_url": f"/api/reports/{safe_id}/html",
+        }
+
+    raise HTTPException(status_code=404, detail="Report not found")

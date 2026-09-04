@@ -11,6 +11,7 @@ services:
     volumes:
       - ./backend:/app
       - ./manuals:/app/manuals
+      - ./database:/app/database
       - model_cache:/app/model_cache
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]

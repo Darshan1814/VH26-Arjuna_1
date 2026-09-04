@@ -23,8 +23,15 @@ import {
   ShieldAlert,
   Binary,
   ArrowRight,
+  Trash2,
 } from "lucide-react";
-import { uploadFlowFiles, executeFlowStep, getFlowSession, restartFlowSession } from "@/lib/api";
+import {
+  uploadFlowFiles,
+  executeFlowStep,
+  getFlowSession,
+  restartFlowSession,
+  removeFlowFile,
+} from "@/lib/api";
 
 interface StepInfo {
   num: number;
@@ -223,6 +230,25 @@ export default function ProcessFlowPage() {
       setErrorMessage(`Upload failed: ${err.message}`);
     } finally {
       setIsRunning(false);
+    }
+  };
+
+  const [removingFile, setRemovingFile] = useState<string | null>(null);
+
+  const handleRemoveFile = async (filename: string) => {
+    if (isRunning || removingFile) return;
+    setRemovingFile(filename);
+    setErrorMessage(null);
+    try {
+      await removeFlowFile(sessionId, filename);
+      // Invalidate step telemetry so downstream stages recalculate
+      setStepTelemetry({});
+      // Re-run Step 1 with remaining files
+      await runStep(1);
+    } catch (err: any) {
+      setErrorMessage(`Failed to remove ${filename}: ${err.message}`);
+    } finally {
+      setRemovingFile(null);
     }
   };
 
@@ -569,18 +595,72 @@ export default function ProcessFlowPage() {
                   </div>
                 )}
 
+                {/* Uploaded Documents List with Cancel/Delete Option */}
                 <div>
-                  <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block mb-2">
-                    Ingested Technical Files:
-                  </span>
-                  <div className="space-y-1.5">
-                    {(activeTelemetry.files || []).map((f: any, i: number) => (
-                      <div key={i} className="flex items-center justify-between p-2 rounded border bg-[var(--color-surface-elevated)]">
-                        <span className="font-medium text-[var(--color-text)]">{f.name}</span>
-                        <span className="text-[10px] font-mono text-[var(--color-text-muted)]">{f.size_kb} KB • {f.type}</span>
-                      </div>
-                    ))}
+                  <div className="flex items-center justify-between mb-2.5">
+                    <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block">
+                      Uploaded Equipment Documents ({activeTelemetry.files?.length || 0}):
+                    </span>
+                    <button
+                      onClick={() => fileInputRef.current?.click()}
+                      className="text-[10px] text-[var(--color-primary)] hover:underline font-semibold flex items-center gap-1 cursor-pointer"
+                    >
+                      <Upload className="h-3 w-3" />
+                      <span>+ Upload Another Manual</span>
+                    </button>
                   </div>
+
+                  {(!activeTelemetry.files || activeTelemetry.files.length === 0) ? (
+                    <div className="rounded-lg border border-dashed border-[var(--color-border)] p-6 text-center text-[var(--color-text-muted)] space-y-2 bg-[var(--color-surface-elevated)]">
+                      <p className="font-semibold text-xs text-[var(--color-text)]">
+                        No documents currently uploaded in this session
+                      </p>
+                      <p className="text-[10px]">
+                        Click &ldquo;Upload Service Manual or Schematic&rdquo; on the left or &ldquo;+ Upload Another Manual&rdquo; above.
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {activeTelemetry.files.map((f: any, i: number) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between p-3 rounded-lg border bg-[var(--color-surface-elevated)] hover:border-[var(--color-primary)]/40 transition shadow-xs group"
+                        >
+                          <div className="flex items-center gap-3 min-w-0">
+                            <div className="rounded-lg p-2 bg-blue-100 dark:bg-blue-950/60 text-[var(--color-primary)] flex-shrink-0">
+                              <FileText className="h-4 w-4" />
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-semibold text-xs text-[var(--color-text)] truncate max-w-xs md:max-w-md" title={f.name}>
+                                {f.name}
+                              </p>
+                              <div className="flex items-center gap-2 text-[10px] text-[var(--color-text-muted)] mt-0.5">
+                                <span className="rounded bg-neutral-200 dark:bg-neutral-800 px-1.5 py-0.2 font-mono font-bold text-[9px]">
+                                  {f.type}
+                                </span>
+                                <span>{f.size_kb} KB</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">• Stored in SQLite</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => handleRemoveFile(f.name)}
+                            disabled={removingFile === f.name || isRunning}
+                            className="inline-flex items-center gap-1 rounded-md px-2.5 py-1.5 text-[11px] font-semibold text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 border border-transparent hover:border-red-200 dark:hover:border-red-900 transition cursor-pointer disabled:opacity-50 flex-shrink-0"
+                            title={`Cancel and remove ${f.name}`}
+                          >
+                            {removingFile === f.name ? (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-red-600" />
+                            ) : (
+                              <Trash2 className="h-3.5 w-3.5" />
+                            )}
+                            <span>Cancel</span>
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
             )}

@@ -165,6 +165,21 @@ export async function restartFlowSession(
   });
 }
 
+export async function removeFlowFile(
+  sessionId: string,
+  filename: string
+): Promise<{ status: string; removed: string; total_files: number }> {
+  return fetchAPI(`/api/process-flow/${sessionId}/files/${encodeURIComponent(filename)}`, {
+    method: "DELETE",
+  });
+}
+
+export async function getFlowSessionFiles(
+  sessionId: string
+): Promise<{ session_id: string; total_files: number; files: any[] }> {
+  return fetchAPI(`/api/process-flow/${sessionId}/files`);
+}
+
 // === Reports ===
 
 export async function generateReport(payload: any): Promise<{

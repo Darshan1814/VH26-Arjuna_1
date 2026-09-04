@@ -125,11 +125,27 @@ export default function ChatPage() {
             <Wrench className="h-4 w-4 text-[var(--color-primary)]" />
             Industrial Diagnostic Assistant
           </h1>
-          <p className="text-xs text-[var(--color-text-muted)]">
-            Active Knowledge Base:{" "}
-            <span className="font-medium text-[var(--color-text)]">
-              {hasUploaded ? activeManualTitle : "None (Upload document to begin)"}
+          <p className="text-xs text-[var(--color-text-muted)] flex items-center gap-2">
+            <span>
+              Active Knowledge Base:{" "}
+              <span className="font-medium text-[var(--color-text)]">
+                {hasUploaded ? activeManualTitle : "None (Upload document to begin)"}
+              </span>
             </span>
+            {hasUploaded && (
+              <button
+                onClick={() => {
+                  setHasUploaded(false);
+                  setActiveManualTitle("");
+                  setUploadStatus("Active document cancelled. Please upload a new manual.");
+                  setTimeout(() => setUploadStatus(null), 4000);
+                }}
+                className="text-[10px] text-red-600 dark:text-red-400 hover:underline font-semibold cursor-pointer"
+                title="Cancel and remove active manual"
+              >
+                (Cancel / Change)
+              </button>
+            )}
           </p>
         </div>
 
