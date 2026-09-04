@@ -1,17 +1,24 @@
 """Centralized application configuration from environment variables."""
 
+import os
 from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
     """All configuration is loaded from environment variables."""
 
-    # --- Generation Model ---
+    # --- OpenAI Configuration ---
+    OPENAI_API_KEY: str = ""
+    OPENAI_MODEL: str = "gpt-5.5"
+    OPENAI_EMBEDDING_MODEL: str = "text-embedding-3-small"
+    EMBEDDING_PROVIDER: str = "local"  # "local" (BAAI/bge-m3) or "openai"
+
+    # --- Azure OpenAI (Fallback/Direct compatibility) ---
     AZURE_OPENAI_ENDPOINT: str = ""
     AZURE_OPENAI_KEY: str = ""
     AZURE_OPENAI_VERSION: str = "2025-01-01-preview"
-    AZURE_OPENAI_DEPLOYMENT: str = "gpt-5-mini"
-    MODEL_GEN: str = "gpt-5.4"
+    AZURE_OPENAI_DEPLOYMENT: str = "gpt-5.5"
+    MODEL_GEN: str = "gpt-5.5"
 
     # --- Supabase ---
     SUPABASE_URL: str = ""
@@ -23,11 +30,9 @@ class Settings(BaseSettings):
     DATABASE_URL: str = ""
     SUPABASE_STORAGE_BUCKET: str = "manuals"
 
-    # --- Embedding ---
+    # --- Embedding & Reranker Models ---
     EMBEDDING_MODEL: str = "BAAI/bge-m3"
     EMBEDDING_DIMENSION: int = 1024
-
-    # --- Reranker ---
     RERANKER_MODEL: str = "BAAI/bge-reranker-v2-m3"
 
     # --- Server ---
@@ -36,13 +41,22 @@ class Settings(BaseSettings):
     LOG_LEVEL: str = "info"
     CORS_ORIGINS: str = "*"
 
-    # --- Model Cache ---
+    # --- Paths ---
     HF_HOME: str = "/app/model_cache"
+    MANUALS_DIR: str = "/app/manuals"
+    EVIDENCE_DIR: str = "/app/manuals/evidence"
+    REPORTS_DIR: str = "/app/manuals/reports"
 
     model_config = {
         "env_file": ".env",
         "case_sensitive": True,
+        "extra": "ignore",
     }
 
 
 settings = Settings()
+
+# Ensure required local storage directories exist
+os.makedirs(settings.MANUALS_DIR, exist_ok=True)
+os.makedirs(settings.EVIDENCE_DIR, exist_ok=True)
+os.makedirs(settings.REPORTS_DIR, exist_ok=True)

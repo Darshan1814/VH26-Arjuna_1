@@ -14,7 +14,7 @@ from typing import Optional
 
 from app.core.config import settings
 from app.core.database import get_supabase_client
-from app.services.embeddings.embedding_service import EmbeddingService
+from app.services.embeddings.embedding_provider import EmbeddingProvider
 from app.services.retrieval.query_analyzer import QueryAnalysis
 
 logger = logging.getLogger(__name__)
@@ -35,21 +35,21 @@ class RetrievedChunk:
     manual_title: str = ""
     machine_model: str = ""
     similarity_score: float = 0.0
-    match_type: str = "vector"  # "exact_error", "vector", "keyword"
+    match_type: str = "vector"  # "exact_error", "keyword", "vector"
     metadata: dict = field(default_factory=dict)
 
 
 class HybridRetriever:
     """Retrieve relevant document chunks using multiple strategies."""
 
-    def __init__(self, embedding_service: Optional[EmbeddingService] = None) -> None:
-        self._embedding_service = embedding_service
+    def __init__(self, embedding_provider: Optional[EmbeddingProvider] = None) -> None:
+        self._embedding_provider = embedding_provider
 
     @property
-    def embedding_service(self) -> EmbeddingService:
-        if self._embedding_service is None:
-            self._embedding_service = EmbeddingService()
-        return self._embedding_service
+    def embedding_provider(self) -> EmbeddingProvider:
+        if self._embedding_provider is None:
+            self._embedding_provider = EmbeddingProvider()
+        return self._embedding_provider
 
     async def retrieve(
         self,
@@ -57,16 +57,7 @@ class HybridRetriever:
         top_k: int = 10,
         similarity_threshold: float = 0.3,
     ) -> list[RetrievedChunk]:
-        """Execute hybrid retrieval based on query analysis.
-
-        Args:
-            analysis: The analyzed query with error codes and machine info.
-            top_k: Maximum number of chunks to return.
-            similarity_threshold: Minimum similarity score for vector results.
-
-        Returns:
-            List of RetrievedChunk objects, sorted by relevance.
-        """
+        """Execute hybrid retrieval: exact error codes + full-text keywords + pgvector."""
         all_chunks: list[RetrievedChunk] = []
 
         # Strategy 1: Exact error code matching
@@ -76,9 +67,15 @@ class HybridRetriever:
                 machine_id=analysis.machine_id,
             )
             all_chunks.extend(exact_chunks)
-            logger.info(f"Exact error search found {len(exact_chunks)} chunks")
 
-        # Strategy 2: Vector similarity search
+        # Strategy 2: Keyword full-text search
+        keyword_chunks = await self._keyword_search(
+            query=analysis.semantic_query,
+            machine_id=analysis.machine_id,
+        )
+        all_chunks.extend(keyword_chunks)
+
+        # Strategy 3: Vector similarity search via pgvector
         vector_chunks = await self._vector_search(
             query=analysis.semantic_query,
             machine_id=analysis.machine_id,
@@ -86,20 +83,58 @@ class HybridRetriever:
             threshold=similarity_threshold,
         )
         all_chunks.extend(vector_chunks)
-        logger.info(f"Vector search found {len(vector_chunks)} chunks")
 
-        # Deduplicate by chunk ID, keeping highest-scoring version
+        # Deduplicate and sort
         deduped = self._deduplicate(all_chunks)
-
-        # Sort: exact matches first, then by similarity score
         deduped.sort(
             key=lambda c: (
-                0 if c.match_type == "exact_error" else 1,
+                0 if c.match_type == "exact_error" else (1 if c.match_type == "keyword" else 2),
                 -c.similarity_score,
             )
         )
-
         return deduped[:top_k]
+
+    async def _keyword_search(
+        self,
+        query: str,
+        machine_id: Optional[str] = None,
+    ) -> list[RetrievedChunk]:
+        """Search text content using keyword pattern matching."""
+        terms = [t for t in query.split() if len(t) > 3][:4]
+        if not terms:
+            return []
+        try:
+            client = get_supabase_client()
+            search_query = client.table("document_chunks").select(
+                "id, content, page_number, section, chunk_index, error_codes, manual_id, machine_id, metadata"
+            )
+            if machine_id:
+                search_query = search_query.eq("machine_id", machine_id)
+
+            pattern = f"%{terms[0]}%"
+            result = search_query.ilike("content", pattern).limit(10).execute()
+
+            chunks = []
+            for row in result.data:
+                chunks.append(
+                    RetrievedChunk(
+                        id=row["id"],
+                        content=row["content"],
+                        page_number=row["page_number"],
+                        section=row.get("section", ""),
+                        chunk_index=row.get("chunk_index", 0),
+                        error_codes=row.get("error_codes", []),
+                        manual_id=row["manual_id"],
+                        machine_id=row["machine_id"],
+                        similarity_score=0.85,
+                        match_type="keyword",
+                        metadata=row.get("metadata", {}),
+                    )
+                )
+            return chunks
+        except Exception as e:
+            logger.warning(f"Keyword search error: {e}")
+            return []
 
     async def _exact_error_search(
         self,
@@ -161,7 +196,7 @@ class HybridRetriever:
         """
         try:
             # Generate query embedding
-            query_embedding = self.embedding_service.embed_text(query)
+            query_embedding = self.embedding_provider.embed_text(query)
 
             client = get_supabase_client()
 
