@@ -2,7 +2,7 @@
  * API client for communicating with the backend.
  *
  * All requests go through the Next.js rewrite proxy (/api/* → backend:8000/api/*)
- * so we don't need to handle CORS on the client side.
+ * or direct backend URL so we don't need to handle CORS on the client side.
  */
 
 import type {
@@ -12,6 +12,8 @@ import type {
   Manual,
   HealthStatus,
   Conversation,
+  FlowSessionState,
+  ReportMeta,
 } from "@/types";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || "";
@@ -46,7 +48,7 @@ export async function getMachines(): Promise<Machine[]> {
   return fetchAPI<Machine[]>("/api/machines");
 }
 
-// === Manuals ===
+// === Manuals & Knowledge Upload ===
 
 export async function getManuals(machineId?: string): Promise<Manual[]> {
   const query = machineId ? `?machine_id=${machineId}` : "";
@@ -75,6 +77,31 @@ export async function uploadManual(
   return res.json();
 }
 
+export async function uploadKnowledgeFiles(
+  files: File[],
+  machineModel?: string
+): Promise<{ status: string; files_processed: number; total_chunks_stored: number }> {
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append("files", file);
+  }
+  if (machineModel) {
+    formData.append("machine_model", machineModel);
+  }
+
+  const res = await fetch(`${API_BASE}/api/upload/knowledge`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "Upload failed");
+    throw new Error(`Upload error: ${err}`);
+  }
+
+  return res.json();
+}
+
 // === RAG Query ===
 
 export async function queryRAG(request: RAGQueryRequest): Promise<RAGResponse> {
@@ -82,6 +109,75 @@ export async function queryRAG(request: RAGQueryRequest): Promise<RAGResponse> {
     method: "POST",
     body: JSON.stringify(request),
   });
+}
+
+// === Process Flow ===
+
+export async function uploadFlowFiles(
+  files: File[],
+  sessionId?: string
+): Promise<{ status: string; session_id: string; files_count: number }> {
+  const formData = new FormData();
+  for (const file of files) {
+    formData.append("files", file);
+  }
+  if (sessionId) {
+    formData.append("session_id", sessionId);
+  }
+
+  const res = await fetch(`${API_BASE}/api/process-flow/upload`, {
+    method: "POST",
+    body: formData,
+  });
+
+  if (!res.ok) {
+    const err = await res.text().catch(() => "Upload failed");
+    throw new Error(`Process Flow upload error: ${err}`);
+  }
+
+  return res.json();
+}
+
+export async function executeFlowStep(
+  sessionId: string,
+  stepNum: number,
+  userInput?: Record<string, any>
+): Promise<{ status: string; session_id: string; step: number; telemetry: any }> {
+  return fetchAPI(`/api/process-flow/${sessionId}/step/${stepNum}`, {
+    method: "POST",
+    body: JSON.stringify({ user_input: userInput || {} }),
+  });
+}
+
+export async function getFlowSession(sessionId: string): Promise<FlowSessionState> {
+  return fetchAPI<FlowSessionState>(`/api/process-flow/${sessionId}`);
+}
+
+export async function restartFlowSession(
+  sessionId: string
+): Promise<{ status: string; session_id: string; current_step: number }> {
+  return fetchAPI(`/api/process-flow/${sessionId}/restart`, {
+    method: "POST",
+  });
+}
+
+// === Reports ===
+
+export async function generateReport(payload: any): Promise<{
+  status: string;
+  report_id: string;
+  pdf_url: string;
+  html_url: string;
+  download_url: string;
+}> {
+  return fetchAPI("/api/reports/generate", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getReportMeta(reportId: string): Promise<ReportMeta> {
+  return fetchAPI<ReportMeta>(`/api/reports/${reportId}`);
 }
 
 // === Conversations ===

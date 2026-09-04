@@ -94,6 +94,25 @@ CREATE TABLE IF NOT EXISTS citations (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Reports: generated professional PDF/HTML troubleshooting reports
+CREATE TABLE IF NOT EXISTS reports (
+    id                    UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    title                 TEXT NOT NULL,
+    query                 TEXT NOT NULL,
+    machine_id            UUID REFERENCES machines(id) ON DELETE SET NULL,
+    machine_model         TEXT,
+    error_code            TEXT,
+    diagnosis             TEXT,
+    probable_causes       JSONB DEFAULT '[]',
+    recommended_solutions JSONB DEFAULT '[]',
+    confidence            FLOAT DEFAULT 0.0,
+    confidence_level      TEXT DEFAULT 'MEDIUM',
+    evidence              JSONB DEFAULT '[]',
+    html_content          TEXT,
+    pdf_path              TEXT,
+    metadata              JSONB DEFAULT '{}',
+    created_at            TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 
 -- ========================
 -- Indexes
@@ -189,6 +208,7 @@ ALTER TABLE document_chunks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE citations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
 
 -- Temporary: allow all access via service role key (backend only)
 CREATE POLICY "Service role full access" ON machines FOR ALL USING (true) WITH CHECK (true);
@@ -197,3 +217,4 @@ CREATE POLICY "Service role full access" ON document_chunks FOR ALL USING (true)
 CREATE POLICY "Service role full access" ON conversations FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON messages FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Service role full access" ON citations FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Service role full access" ON reports FOR ALL USING (true) WITH CHECK (true);
