@@ -30,10 +30,14 @@ spec:
           env:
             - name: NODE_ENV
               value: "production"
+            # BACKEND_URL tells Next.js server-side rewrites where the backend is (internal k8s DNS).
+            # NEXT_PUBLIC_API_URL is intentionally left EMPTY so client-side browser JS uses
+            # relative paths (/api/*) — Next.js server proxy routes them correctly without any
+            # client needing to know the EC2 IP, port, or internal service name.
             - name: BACKEND_URL
               value: "http://{{ include "mt-system.fullname" . }}-backend:{{ .Values.backend.service.port }}"
             - name: NEXT_PUBLIC_API_URL
-              value: "http://{{ include "mt-system.fullname" . }}-backend:{{ .Values.backend.service.port }}"
+              value: ""
             - name: NEXT_PUBLIC_SUPABASE_URL
               valueFrom:
                 secretKeyRef:

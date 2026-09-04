@@ -24,11 +24,11 @@ backend:
     nodePort: 30080
   resources:
     requests:
-      cpu: 100m
-      memory: 256Mi
+      cpu: 200m
+      memory: 512Mi
     limits:
-      cpu: 500m
-      memory: 1536Mi
+      cpu: 1000m
+      memory: 2048Mi
   hpa:
     enabled: true
     minReplicas: 1
@@ -38,13 +38,13 @@ backend:
   probes:
     liveness:
       path: /health
-      initialDelaySeconds: 90
+      initialDelaySeconds: 120
       periodSeconds: 30
       timeoutSeconds: 15
       failureThreshold: 5
     readiness:
       path: /health
-      initialDelaySeconds: 45
+      initialDelaySeconds: 60
       periodSeconds: 10
       timeoutSeconds: 10
       failureThreshold: 5
@@ -73,8 +73,8 @@ frontend:
       cpu: 50m
       memory: 128Mi
     limits:
-      cpu: 200m
-      memory: 384Mi
+      cpu: 300m
+      memory: 512Mi
   hpa:
     enabled: true
     minReplicas: 1
@@ -104,19 +104,34 @@ ingress:
 
 # -- Secrets (injected from Jenkins at deploy time) --
 secrets:
+  # Groq LLM
   groqApiKey: ""
   groqModel: "qwen/qwen3.8-27b"
+  groqFastModel: "openai/gpt-oss-20b"
+  groqReasoningModel: "openai/gpt-oss-120b"
+  groqVisionModel: "openai/gpt-oss-20b"
+  # ElevenLabs Multilingual Voice AI
+  elevenLabsApiKey: ""
+  elevenLabsVoiceId: "gHu9GtaHOXcSqFTK06ux"
+  elevenLabsFallbackVoiceId: "EXAVITQu4vr4xnSDxMaL"
+  elevenLabsModelId: "eleven_multilingual_v2"
+  # Web search
+  serperApiKey: ""
+  # Supabase (optional cloud sync)
   supabaseUrl: ""
   supabaseKey: ""
   supabaseServiceRoleKey: ""
+  supabasePublishableKey: ""
+  supabaseSecretKey: ""
   supabaseStorageBucket: "manuals"
 
-# -- Persistent Volume Claim (model cache) --
+# -- Persistent Volume Claims (model cache, database, manuals) --
 persistence:
   enabled: true
   storageClass: ""
   accessMode: ReadWriteOnce
-  size: 2Gi
+  size: 5Gi         # model_cache
+  manualsSize: 10Gi # uploaded OEM manuals
 
 # -- Observability & Monitoring (Prometheus + Grafana) --
 monitoring:
@@ -134,4 +149,3 @@ monitoring:
     nodePort: 30030
     adminUser: admin
     adminPassword: admin
-

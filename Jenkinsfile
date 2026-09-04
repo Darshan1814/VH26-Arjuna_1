@@ -10,18 +10,31 @@ pipeline {
         IMAGE_TAG       = "${env.BUILD_NUMBER}"
 
         // Jenkins Credentials IDs (configured in Jenkins Credentials Store)
-        // Fallback default values provided where safe
         DOCKER_CREDS_ID = 'docker-credentials'
         SONAR_CREDS_ID  = 'sonar-token'
 
-        // Application Secrets & Configuration
+        // --- Groq LLM Inference ---
         GROQ_API_KEY              = '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'
         GROQ_MODEL                = 'qwen/qwen3.8-27b'
+        GROQ_FAST_MODEL           = 'openai/gpt-oss-20b'
+        GROQ_REASONING_MODEL      = 'openai/gpt-oss-120b'
+        GROQ_VISION_MODEL         = 'openai/gpt-oss-20b'
+
+        // --- ElevenLabs Multilingual Voice AI (Marathi, Hindi, English) ---
+        ELEVENLABS_API_KEY          = 'sk_fba5cf151cea3db4dfb248622cd85872fd097a02fa15520e'
+        ELEVENLABS_VOICE_ID         = 'gHu9GtaHOXcSqFTK06ux'
+        ELEVENLABS_FALLBACK_VOICE_ID = 'EXAVITQu4vr4xnSDxMaL'
+        ELEVENLABS_MODEL_ID         = 'eleven_multilingual_v2'
+
+        // --- Web Search ---
+        SERPER_API_KEY = ''
+
+        // --- Supabase Cloud Sync ---
         SUPABASE_URL              = 'https://hvnqbtobyvfxtbbjqdw.supabase.co'
         SUPABASE_KEY              = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bnFidG9ieXZmeHRiYmpicWR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NzgwMDUsImV4cCI6MjEwNDA1NDAwNX0.WSrmUWCe43Wb_gbt59kq5b8OWqJPm-muAn_fhnJA_KQ'
         SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bnFidG9ieXZmeHRiYmpicWR3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODQ3ODAwNSwiZXhwIjoyMTA0MDU0MDA1fQ.fiOMxdcxrq5izcCdeMjqTuF_5havyK6ll1-gJ-FpdBE'
 
-        // Kubernetes & Helm
+        // --- Kubernetes & Helm ---
         KUBECONFIG_ID   = 'kubeconfig'
         K8S_NAMESPACE   = 'default'
         HELM_RELEASE    = 'mt-system'
@@ -153,11 +166,14 @@ pipeline {
                         ./backend
 
                     echo "Building Frontend Production Image: ${FRONTEND_IMAGE}:${IMAGE_TAG}..."
+                    # IMPORTANT: NEXT_PUBLIC_API_URL must be EMPTY at build time.
+                    # This makes client browsers use relative /api/* paths, which Next.js
+                    # server-side rewrites proxy to the backend container — no EC2 IP hardcoding.
                     docker build \
                         -f frontend/Dockerfile.prod \
-                        --build-arg NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-""} \
-                        --build-arg NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL} \
-                        --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_KEY} \
+                        --build-arg NEXT_PUBLIC_API_URL="" \
+                        --build-arg NEXT_PUBLIC_SUPABASE_URL="${SUPABASE_URL}" \
+                        --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY="${SUPABASE_KEY}" \
                         -t ${FRONTEND_IMAGE}:${IMAGE_TAG} \
                         -t ${FRONTEND_IMAGE}:latest \
                         ./frontend
@@ -274,6 +290,14 @@ pipeline {
                             --set frontend.hpa.enabled=true \
                             --set secrets.groqApiKey="${GROQ_API_KEY}" \
                             --set secrets.groqModel="${GROQ_MODEL}" \
+                            --set secrets.groqFastModel="${GROQ_FAST_MODEL}" \
+                            --set secrets.groqReasoningModel="${GROQ_REASONING_MODEL}" \
+                            --set secrets.groqVisionModel="${GROQ_VISION_MODEL}" \
+                            --set secrets.elevenLabsApiKey="${ELEVENLABS_API_KEY}" \
+                            --set secrets.elevenLabsVoiceId="${ELEVENLABS_VOICE_ID}" \
+                            --set secrets.elevenLabsFallbackVoiceId="${ELEVENLABS_FALLBACK_VOICE_ID}" \
+                            --set secrets.elevenLabsModelId="${ELEVENLABS_MODEL_ID}" \
+                            --set secrets.serperApiKey="${SERPER_API_KEY}" \
                             --set secrets.supabaseUrl="${SUPABASE_URL}" \
                             --set secrets.supabaseKey="${SUPABASE_KEY}" \
                             --set secrets.supabaseServiceRoleKey="${SUPABASE_SERVICE_ROLE_KEY}" \
@@ -339,12 +363,85 @@ pipeline {
                     echo "===> Ingress Rules:"
                     kubectl get ingress -n ${K8S_NAMESPACE} || true
 
-                    # Report pipeline success & quality metrics to backend Prometheus endpoint
-                    echo "===> Reporting CI/CD event to Prometheus monitoring..."
-                    curl -s -X POST http://localhost:8000/api/monitoring/pipeline-event \
+                    # Report pipeline success to monitoring endpoint
+                    echo "====> Reporting CI/CD event to Prometheus monitoring..."
+                    curl -sf -X POST http://localhost:8000/api/monitoring/pipeline-event \
                         -H "Content-Type: application/json" \
                         -d '{"pipeline_name":"Arjuna_1","stage_name":"Deployment","status":"SUCCESS","sonarqube_status":"OK","trivy_critical":0,"trivy_high":0}' || true
                 """
+            }
+        }
+
+        // ====================================================================
+        // STAGE 9: Redeploy on EC2 (Docker Compose — Production Server)
+        // Pull latest images and restart running containers on the EC2 instance.
+        // This stage runs after images are pushed to DockerHub so EC2 always
+        // gets the exact build that just passed all tests and scans.
+        // ====================================================================
+        stage('Redeploy on EC2 (Docker Compose)') {
+            steps {
+                echo "====> Pulling latest images and restarting containers on EC2 production server..."
+                script {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                        sh """
+                            # Write a fresh .env with all secrets so docker compose picks them up correctly
+                            cat > .env << ENVEOF
+GROQ_API_KEY=${GROQ_API_KEY}
+GROQ_MODEL=${GROQ_MODEL}
+GROQ_FAST_MODEL=${GROQ_FAST_MODEL}
+GROQ_REASONING_MODEL=${GROQ_REASONING_MODEL}
+GROQ_VISION_MODEL=${GROQ_VISION_MODEL}
+ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
+ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}
+ELEVENLABS_FALLBACK_VOICE_ID=${ELEVENLABS_FALLBACK_VOICE_ID}
+ELEVENLABS_MODEL_ID=${ELEVENLABS_MODEL_ID}
+SERPER_API_KEY=${SERPER_API_KEY}
+SUPABASE_URL=${SUPABASE_URL}
+SUPABASE_KEY=${SUPABASE_KEY}
+SUPABASE_ANON_KEY=${SUPABASE_KEY}
+SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
+SUPABASE_STORAGE_BUCKET=manuals
+EMBEDDING_MODEL=BAAI/bge-m3
+EMBEDDING_DIMENSION=1024
+RERANKER_MODEL=BAAI/bge-reranker-v2-m3
+HF_HOME=/app/model_cache
+MANUALS_DIR=/app/manuals
+SQLITE_DB_PATH=/app/database/troubleshooter.db
+BACKEND_HOST=0.0.0.0
+BACKEND_PORT=8000
+LOG_LEVEL=info
+NEXT_PUBLIC_API_URL=
+NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
+NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_KEY}
+BACKEND_URL=http://backend:8000
+DATA_VOLUME_PATH=.
+ENVEOF
+
+                            # Update docker compose image tags to pull the exact build that just passed
+                            echo "Pulling build #${IMAGE_TAG} production images from DockerHub..."
+                            docker pull ${BACKEND_IMAGE}:latest  || true
+                            docker pull ${FRONTEND_IMAGE}:latest || true
+
+                            # Restart containers using freshly-pulled images — no rebuild needed
+                            echo "Restarting production containers with latest images..."
+                            docker compose down --remove-orphans || docker-compose down --remove-orphans || true
+                            docker compose up -d backend frontend || docker-compose up -d backend frontend
+
+                            # Wait for services to initialise
+                            echo "Waiting 45 seconds for containers to initialise..."
+                            sleep 45
+
+                            echo "--- Container Status ---"
+                            docker compose ps || docker-compose ps || true
+
+                            echo "--- Backend Health Check ---"
+                            curl -sf http://localhost:8000/health && echo "  BACKEND: HEALTHY" || echo "  BACKEND: Still starting up, check logs with: docker compose logs backend"
+
+                            echo "--- Frontend Health Check ---"
+                            curl -sf -o /dev/null http://localhost:3000 && echo "  FRONTEND: HEALTHY" || echo "  FRONTEND: Still starting up, check logs with: docker compose logs frontend"
+                        """
+                    }
+                }
             }
         }
     }

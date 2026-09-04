@@ -28,6 +28,7 @@ spec:
               containerPort: {{ .Values.backend.service.port }}
               protocol: TCP
           env:
+            # --- Static backend config ---
             - name: BACKEND_HOST
               value: {{ .Values.backend.env.BACKEND_HOST | quote }}
             - name: BACKEND_PORT
@@ -42,6 +43,11 @@ spec:
               value: {{ .Values.backend.env.RERANKER_MODEL | quote }}
             - name: HF_HOME
               value: {{ .Values.backend.env.HF_HOME | quote }}
+            - name: MANUALS_DIR
+              value: "/app/manuals"
+            - name: SQLITE_DB_PATH
+              value: "/app/database/troubleshooter.db"
+            # --- Groq LLM keys (from secret) ---
             - name: GROQ_API_KEY
               valueFrom:
                 secretKeyRef:
@@ -52,6 +58,43 @@ spec:
                 secretKeyRef:
                   name: {{ include "mt-system.fullname" . }}-secrets
                   key: GROQ_MODEL
+            - name: GROQ_FAST_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: GROQ_FAST_MODEL
+            - name: GROQ_REASONING_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: GROQ_REASONING_MODEL
+            - name: GROQ_VISION_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: GROQ_VISION_MODEL
+            # --- ElevenLabs Voice AI (from secret) ---
+            - name: ELEVENLABS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: ELEVENLABS_API_KEY
+            - name: ELEVENLABS_VOICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: ELEVENLABS_VOICE_ID
+            - name: ELEVENLABS_FALLBACK_VOICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: ELEVENLABS_FALLBACK_VOICE_ID
+            - name: ELEVENLABS_MODEL_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: ELEVENLABS_MODEL_ID
+            # --- Supabase (from secret) ---
             - name: SUPABASE_URL
               valueFrom:
                 secretKeyRef:
@@ -77,6 +120,12 @@ spec:
                 secretKeyRef:
                   name: {{ include "mt-system.fullname" . }}-secrets
                   key: SUPABASE_STORAGE_BUCKET
+            # --- Serper (from secret) ---
+            - name: SERPER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: SERPER_API_KEY
           resources:
             {{- toYaml .Values.backend.resources | nindent 12 }}
           livenessProbe:
@@ -96,18 +145,31 @@ spec:
             timeoutSeconds: {{ .Values.backend.probes.readiness.timeoutSeconds }}
             failureThreshold: {{ .Values.backend.probes.readiness.failureThreshold | default 3 }}
           volumeMounts:
-            {{- if .Values.persistence.enabled }}
             - name: model-cache
               mountPath: /app/model_cache
             - name: db-data
               mountPath: /app/database
-            {{- end }}
+            - name: manuals-data
+              mountPath: /app/manuals
       volumes:
-        {{- if .Values.persistence.enabled }}
         - name: model-cache
+          {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
             claimName: {{ include "mt-system.fullname" . }}-model-cache-pvc
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
         - name: db-data
+          {{- if .Values.persistence.enabled }}
           persistentVolumeClaim:
             claimName: {{ include "mt-system.fullname" . }}-data-pvc
-        {{- end }}
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: manuals-data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "mt-system.fullname" . }}-manuals-pvc
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
