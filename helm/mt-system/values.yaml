@@ -1,0 +1,115 @@
+# =============================================================================
+# Machine Troubleshooter Helm Values
+# =============================================================================
+
+# -- Global Settings --
+nameOverride: ""
+fullnameOverride: "mt"
+
+# -- Docker Registry --
+registry: docker.io
+imageCredentials:
+  username: darshan11111
+
+# -- Backend Configuration --
+backend:
+  replicaCount: 2
+  image:
+    repository: darshan11111/mt-backend
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 8000
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: "1"
+      memory: 2Gi
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: 80
+  probes:
+    liveness:
+      path: /health
+      initialDelaySeconds: 60
+      periodSeconds: 30
+      timeoutSeconds: 10
+    readiness:
+      path: /health
+      initialDelaySeconds: 30
+      periodSeconds: 10
+      timeoutSeconds: 5
+  env:
+    BACKEND_HOST: "0.0.0.0"
+    BACKEND_PORT: "8000"
+    LOG_LEVEL: "info"
+    EMBEDDING_MODEL: "BAAI/bge-m3"
+    EMBEDDING_DIMENSION: "1024"
+    RERANKER_MODEL: "BAAI/bge-reranker-v2-m3"
+    HF_HOME: "/app/model_cache"
+
+# -- Frontend Configuration --
+frontend:
+  replicaCount: 2
+  image:
+    repository: darshan11111/mt-frontend
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: ClusterIP
+    port: 3000
+  resources:
+    requests:
+      cpu: 200m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  hpa:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 80
+  probes:
+    liveness:
+      path: /
+      initialDelaySeconds: 30
+      periodSeconds: 30
+      timeoutSeconds: 10
+    readiness:
+      path: /
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 5
+
+# -- Ingress Configuration --
+ingress:
+  enabled: true
+  className: nginx
+  host: mt.local
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+
+# -- Secrets (injected from Jenkins at deploy time) --
+secrets:
+  groqApiKey: ""
+  groqModel: "qwen/qwen3.8-27b"
+  supabaseUrl: ""
+  supabaseKey: ""
+  supabaseServiceRoleKey: ""
+  supabaseStorageBucket: "manuals"
+
+# -- Persistent Volume Claim (model cache) --
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 5Gi

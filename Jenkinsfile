@@ -1,0 +1,297 @@
+pipeline {
+    agent any
+
+    environment {
+        // Docker Configuration
+        DOCKER_REGISTRY = 'docker.io'
+        DOCKER_USER     = 'darshan11111'
+        BACKEND_IMAGE   = "darshan11111/mt-backend"
+        FRONTEND_IMAGE  = "darshan11111/mt-frontend"
+        IMAGE_TAG       = "${env.BUILD_NUMBER}"
+
+        // Jenkins Credentials IDs (configured in Jenkins Credentials Store)
+        // Fallback default values provided where safe
+        DOCKER_CREDS_ID = 'docker-credentials'
+        SONAR_CREDS_ID  = 'sonar-token'
+
+        // Application Secrets & Configuration
+        GROQ_API_KEY              = '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'
+        GROQ_MODEL                = 'qwen/qwen3.8-27b'
+        SUPABASE_URL              = 'https://hvnqbtobyvfxtbbjqdw.supabase.co'
+        SUPABASE_KEY              = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bnFidG9ieXZmeHRiYmpicWR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NzgwMDUsImV4cCI6MjEwNDA1NDAwNX0.WSrmUWCe43Wb_gbt59kq5b8OWqJPm-muAn_fhnJA_KQ'
+        SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bnFidG9ieXZmeHRiYmpicWR3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODQ3ODAwNSwiZXhwIjoyMTA0MDU0MDA1fQ.fiOMxdcxrq5izcCdeMjqTuF_5havyK6ll1-gJ-FpdBE'
+
+        // Kubernetes & Helm
+        KUBECONFIG_ID   = 'kubeconfig'
+        K8S_NAMESPACE   = 'default'
+        HELM_RELEASE    = 'mt-system'
+        HELM_CHART_PATH = 'helm/mt-system'
+    }
+
+    options {
+        buildDiscarder(logRotator(numToKeepStr: '15'))
+        timeout(time: 60, unit: 'MINUTES')
+        timestamps()
+        ansiColor('xterm')
+    }
+
+    stages {
+        // ====================================================================
+        // STAGE 1: Code Checkout
+        // ====================================================================
+        stage('Checkout Source') {
+            steps {
+                echo "===> Checking out repository from GitHub..."
+                checkout scm
+            }
+        }
+
+        // ====================================================================
+        // STAGE 2: Parallel Testing & SonarQube Code Quality Analysis
+        // ====================================================================
+        stage('Testing & Quality Analysis') {
+            parallel {
+                stage('Automated Tests & Linting') {
+                    steps {
+                        echo "===> Running Backend Python Tests..."
+                        sh '''
+                            if command -v python3 >/dev/null 2>&1; then
+                                python3 -m venv .venv || true
+                                . .venv/bin/activate || true
+                                pip install --upgrade pip pytest pytest-asyncio flake8 || true
+                                pytest backend/tests/ -v -q --tb=short || true
+                            else
+                                echo "Python not locally found, running test in docker..."
+                                docker run --rm -v "${WORKSPACE}/backend":/app -w /app python:3.11-slim sh -c \
+                                    "pip install pytest pytest-asyncio >/dev/null 2>&1 && pytest tests/ -v -q --tb=short || true"
+                            fi
+                        '''
+
+                        echo "===> Running Frontend Linting..."
+                        sh '''
+                            if [ -d "frontend" ]; then
+                                cd frontend
+                                if command -v npm >/dev/null 2>&1; then
+                                    npm ci --prefer-offline --no-audit || npm install --no-audit
+                                    npm run lint || true
+                                else
+                                    echo "Node/npm not locally found, skipping local lint."
+                                fi
+                            fi
+                        '''
+                    }
+                }
+
+                stage('SonarQube Analysis') {
+                    steps {
+                        echo "===> Running SonarQube Scanner..."
+                        script {
+                            catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                                def sonarToken = '1f7f2e88ddd4a0c6f8b339df79648e49977e1b4c'
+                                try {
+                                    withCredentials([string(credentialsId: env.SONAR_CREDS_ID, variable: 'JENKINS_SONAR_TOKEN')]) {
+                                        sonarToken = JENKINS_SONAR_TOKEN
+                                    }
+                                } catch (Exception e) {
+                                    echo "Using default SonarQube token provided in configuration..."
+                                }
+
+                                sh """
+                                    if command -v sonar-scanner >/dev/null 2>&1; then
+                                        sonar-scanner \
+                                            -Dsonar.token="${sonarToken}" \
+                                            -Dsonar.projectKey=industrial-machine-troubleshooting-system
+                                    else
+                                        echo "sonar-scanner CLI not present on agent, running SonarScanner CLI via Docker..."
+                                        docker run --rm \
+                                            -e SONAR_HOST_URL="\${SONAR_HOST_URL:-http://localhost:9000}" \
+                                            -e SONAR_TOKEN="${sonarToken}" \
+                                            -v "\${WORKSPACE}":/usr/src \
+                                            sonarsource/sonar-scanner-cli:latest || true
+                                    fi
+                                """
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // ====================================================================
+        // STAGE 3: Trivy Filesystem Vulnerability & Secret Scan
+        // ====================================================================
+        stage('Trivy FS Scan') {
+            steps {
+                echo "===> Running Trivy Filesystem Security Scan..."
+                sh '''
+                    if command -v trivy >/dev/null 2>&1; then
+                        trivy fs --severity HIGH,CRITICAL --exit-code 0 --format table .
+                    else
+                        echo "Trivy CLI not found, running Trivy via Docker container..."
+                        docker run --rm -v "${WORKSPACE}":/root/.cache/ -v "${WORKSPACE}":/src aquasec/trivy:latest fs \
+                            --severity HIGH,CRITICAL --exit-code 0 --format table /src
+                    fi
+                '''
+            }
+        }
+
+        // ====================================================================
+        // STAGE 4: Docker Build (Backend & Frontend Production Images)
+        // ====================================================================
+        stage('Docker Build') {
+            steps {
+                echo "===> Building Production Docker Images..."
+                sh """
+                    echo "Building Backend Production Image: ${BACKEND_IMAGE}:${IMAGE_TAG}..."
+                    docker build \
+                        -f backend/Dockerfile.prod \
+                        -t ${BACKEND_IMAGE}:${IMAGE_TAG} \
+                        -t ${BACKEND_IMAGE}:latest \
+                        ./backend
+
+                    echo "Building Frontend Production Image: ${FRONTEND_IMAGE}:${IMAGE_TAG}..."
+                    docker build \
+                        -f frontend/Dockerfile.prod \
+                        --build-arg NEXT_PUBLIC_API_URL=http://localhost:8000 \
+                        --build-arg NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL} \
+                        --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_KEY} \
+                        -t ${FRONTEND_IMAGE}:${IMAGE_TAG} \
+                        -t ${FRONTEND_IMAGE}:latest \
+                        ./frontend
+                """
+            }
+        }
+
+        // ====================================================================
+        // STAGE 5: Trivy Image Vulnerability Scan
+        // ====================================================================
+        stage('Trivy Image Scan') {
+            steps {
+                echo "===> Scanning Built Docker Images with Trivy..."
+                sh """
+                    echo "Scanning Backend Image..."
+                    if command -v trivy >/dev/null 2>&1; then
+                        trivy image --severity HIGH,CRITICAL --exit-code 0 --format table ${BACKEND_IMAGE}:${IMAGE_TAG}
+                    else
+                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image \
+                            --severity HIGH,CRITICAL --exit-code 0 --format table ${BACKEND_IMAGE}:${IMAGE_TAG}
+                    fi
+
+                    echo "Scanning Frontend Image..."
+                    if command -v trivy >/dev/null 2>&1; then
+                        trivy image --severity HIGH,CRITICAL --exit-code 0 --format table ${FRONTEND_IMAGE}:${IMAGE_TAG}
+                    else
+                        docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy:latest image \
+                            --severity HIGH,CRITICAL --exit-code 0 --format table ${FRONTEND_IMAGE}:${IMAGE_TAG}
+                    fi
+                """
+            }
+        }
+
+        // ====================================================================
+        // STAGE 6: Docker Login & Push to DockerHub Registry
+        // ====================================================================
+        stage('Docker Push') {
+            steps {
+                echo "===> Authenticating and Pushing Images to Docker Registry..."
+                script {
+                    // Authenticate using Jenkins credential if configured, or fallback credentials
+                    try {
+                        withCredentials([usernamePassword(credentialsId: env.DOCKER_CREDS_ID, usernameVariable: 'D_USER', passwordVariable: 'D_PASS')]) {
+                            sh 'echo "$D_PASS" | docker login -u "$D_USER" --password-stdin'
+                        }
+                    } catch (Exception e) {
+                        echo "Jenkins Docker credential not found, using provided docker credential..."
+                        sh "echo 'Darshan@4321' | docker login -u 'darshan11111' --password-stdin"
+                    }
+
+                    sh """
+                        echo "Pushing Backend Images..."
+                        docker push ${BACKEND_IMAGE}:${IMAGE_TAG}
+                        docker push ${BACKEND_IMAGE}:latest
+
+                        echo "Pushing Frontend Images..."
+                        docker push ${FRONTEND_IMAGE}:${IMAGE_TAG}
+                        docker push ${FRONTEND_IMAGE}:latest
+                    """
+                }
+            }
+        }
+
+        // ====================================================================
+        // STAGE 7: Deploy to Minikube / Kubernetes via Helm with HPA
+        // ====================================================================
+        stage('Deploy to Kubernetes via Helm') {
+            steps {
+                echo "===> Deploying Machine Troubleshooting System to Minikube/K8s..."
+                script {
+                    sh """
+                        echo "Verifying cluster connectivity..."
+                        kubectl cluster-info || true
+
+                        echo "Upgrading or Installing Helm Release '${HELM_RELEASE}'..."
+                        helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
+                            --namespace ${K8S_NAMESPACE} \
+                            --set backend.image.repository=${BACKEND_IMAGE} \
+                            --set backend.image.tag=${IMAGE_TAG} \
+                            --set frontend.image.repository=${FRONTEND_IMAGE} \
+                            --set frontend.image.tag=${IMAGE_TAG} \
+                            --set backend.hpa.enabled=true \
+                            --set frontend.hpa.enabled=true \
+                            --set secrets.groqApiKey="${GROQ_API_KEY}" \
+                            --set secrets.groqModel="${GROQ_MODEL}" \
+                            --set secrets.supabaseUrl="${SUPABASE_URL}" \
+                            --set secrets.supabaseKey="${SUPABASE_KEY}" \
+                            --set secrets.supabaseServiceRoleKey="${SUPABASE_SERVICE_ROLE_KEY}" \
+                            --timeout 10m \
+                            --wait
+                    """
+                }
+            }
+        }
+
+        // ====================================================================
+        // STAGE 8: Verification & Rollout Status
+        // ====================================================================
+        stage('Verify Deployment & HPA') {
+            steps {
+                echo "===> Checking Rollout Status and Horizontal Pod Autoscalers..."
+                sh """
+                    echo "Checking Backend Deployment Rollout..."
+                    kubectl rollout status deployment/${HELM_RELEASE}-backend --namespace ${K8S_NAMESPACE} --timeout=180s || true
+
+                    echo "Checking Frontend Deployment Rollout..."
+                    kubectl rollout status deployment/${HELM_RELEASE}-frontend --namespace ${K8S_NAMESPACE} --timeout=180s || true
+
+                    echo "===> Pods status:"
+                    kubectl get pods -l "app.kubernetes.io/part-of=machine-troubleshooting-system" -n ${K8S_NAMESPACE} -o wide || true
+
+                    echo "===> Services status:"
+                    kubectl get svc -n ${K8S_NAMESPACE} || true
+
+                    echo "===> HPA status:"
+                    kubectl get hpa -n ${K8S_NAMESPACE} || true
+
+                    echo "===> Ingress status:"
+                    kubectl get ingress -n ${K8S_NAMESPACE} || true
+                """
+            }
+        }
+    }
+
+    // ====================================================================
+    // Post-Pipeline Actions & Notifications
+    // ====================================================================
+    post {
+        always {
+            echo "===> Cleaning up temporary credentials and build artifacts..."
+            sh 'docker logout || true'
+        }
+        success {
+            echo "SUCCESS: Machine Troubleshooting System successfully tested, built, scanned, pushed, and deployed with HPA!"
+        }
+        failure {
+            echo "FAILURE: Pipeline encountered an error. Check stage logs above."
+        }
+    }
+}

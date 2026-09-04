@@ -211,10 +211,20 @@ ALTER TABLE citations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE reports ENABLE ROW LEVEL SECURITY;
 
 -- Temporary: allow all access via service role key (backend only)
-CREATE POLICY "Service role full access" ON machines FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Service role full access" ON manuals FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Service role full access" ON document_chunks FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Service role full access" ON conversations FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Service role full access" ON messages FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Service role full access" ON citations FOR ALL USING (true) WITH CHECK (true);
-CREATE POLICY "Service role full access" ON reports FOR ALL USING (true) WITH CHECK (true);
+DO $$
+DECLARE
+    tbl TEXT;
+    tables TEXT[] := ARRAY[
+        'machines', 'manuals', 'document_chunks',
+        'conversations', 'messages', 'citations', 'reports'
+    ];
+BEGIN
+    FOREACH tbl IN ARRAY tables
+    LOOP
+        EXECUTE format('DROP POLICY IF EXISTS "Service role full access" ON %I', tbl);
+        EXECUTE format('DROP POLICY IF EXISTS "allow_all_access" ON %I', tbl);
+        EXECUTE format('CREATE POLICY "allow_all_access" ON %I FOR ALL USING (true) WITH CHECK (true)', tbl);
+    END LOOP;
+END;
+$$;
+
