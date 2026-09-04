@@ -1,0 +1,61 @@
+version: 0.2
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+      nodejs: 20
+    commands:
+      - echo "=== Phase: Install ==="
+      - echo "Checking runtime versions..."
+      - python3 --version
+      - node --version
+      - npm --version
+
+  pre_build:
+    commands:
+      - echo "=== Phase: Pre-Build ==="
+      - echo "Validating Python backend syntax..."
+      - python3 -m py_compile backend/app/main.py backend/app/core/config.py
+      - echo "Ensuring execution permissions on deployment scripts..."
+      - chmod +x scripts/*.sh || true
+
+  build:
+    commands:
+      - echo "=== Phase: Build ==="
+      - echo "Validating frontend build & dependencies..."
+      - cd frontend
+      - npm ci || npm install
+      - npm run build
+      - cd ..
+      - echo "Frontend build succeeded."
+
+  post_build:
+    commands:
+      - echo "=== Phase: Post-Build ==="
+      - echo "Verifying deployment package artifacts..."
+      - test -f appspec.yml || (echo "ERROR: appspec.yml is missing!" && exit 1)
+      - test -f docker-compose.prod.yml || (echo "ERROR: docker-compose.prod.yml is missing!" && exit 1)
+      - echo "All required deployment files present. CodeBuild completed on $(date)."
+
+artifacts:
+  files:
+    - appspec.yml
+    - docker-compose.yml
+    - docker-compose.prod.yml
+    - .env.example
+    - scripts/**/*
+    - backend/**/*
+    - frontend/**/*
+    - database/**/*
+    - manuals/**/*
+    - Makefile
+    - README.md
+    - AWS_DEPLOYMENT_GUIDE.md
+  discard-paths: no
+
+cache:
+  paths:
+    - '/root/.npm/**/*'
+    - 'frontend/node_modules/**/*'
+    - 'frontend/.next/cache/**/*'

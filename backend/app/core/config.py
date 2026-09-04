@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     BACKEND_HOST: str = "0.0.0.0"
     BACKEND_PORT: int = 8000
     LOG_LEVEL: str = "info"
+    CORS_ORIGINS: str = "*"
 
     # --- Model Cache ---
     HF_HOME: str = "/app/model_cache"
