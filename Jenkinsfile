@@ -246,6 +246,10 @@ pipeline {
                             export KUBECONFIG="/home/ec2-user/.kube/config"
                         fi
 
+                        # Enable metrics-server and ingress in Minikube if available for HPA metrics
+                        minikube addons enable metrics-server 2>/dev/null || true
+                        minikube addons enable ingress 2>/dev/null || true
+
                         echo "Verifying cluster connectivity (KUBECONFIG=\${KUBECONFIG:-default})..."
                         kubectl cluster-info || true
 
@@ -286,14 +290,18 @@ pipeline {
                     fi
 
                     echo "Checking Backend Deployment Rollout..."
-                    kubectl rollout status deployment/${HELM_RELEASE}-backend --namespace ${K8S_NAMESPACE} --timeout=180s || true
+                    kubectl rollout status deployment/mt-backend --namespace ${K8S_NAMESPACE} --timeout=180s || \
+                        kubectl rollout status deployment/${HELM_RELEASE}-backend --namespace ${K8S_NAMESPACE} --timeout=180s || true
 
                     echo "Checking Frontend Deployment Rollout..."
-                    kubectl rollout status deployment/${HELM_RELEASE}-frontend --namespace ${K8S_NAMESPACE} --timeout=180s || true
+                    kubectl rollout status deployment/mt-frontend --namespace ${K8S_NAMESPACE} --timeout=180s || \
+                        kubectl rollout status deployment/${HELM_RELEASE}-frontend --namespace ${K8S_NAMESPACE} --timeout=180s || true
 
                     echo "Checking Prometheus & Grafana Monitoring Rollout..."
-                    kubectl rollout status deployment/${HELM_RELEASE}-prometheus --namespace ${K8S_NAMESPACE} --timeout=120s || true
-                    kubectl rollout status deployment/${HELM_RELEASE}-grafana --namespace ${K8S_NAMESPACE} --timeout=120s || true
+                    kubectl rollout status deployment/mt-prometheus --namespace ${K8S_NAMESPACE} --timeout=120s || \
+                        kubectl rollout status deployment/${HELM_RELEASE}-prometheus --namespace ${K8S_NAMESPACE} --timeout=120s || true
+                    kubectl rollout status deployment/mt-grafana --namespace ${K8S_NAMESPACE} --timeout=120s || \
+                        kubectl rollout status deployment/${HELM_RELEASE}-grafana --namespace ${K8S_NAMESPACE} --timeout=120s || true
 
                     echo "===> Application & Monitoring Pods:"
                     kubectl get pods -l "app.kubernetes.io/part-of=machine-troubleshooting-system" -n ${K8S_NAMESPACE} -o wide || true

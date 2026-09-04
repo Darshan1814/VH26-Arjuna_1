@@ -24,7 +24,7 @@ data:
           "targets": [
             {
               "expr": "sum(rate(http_requests_total[1m])) by (endpoint)",
-              "legendFormat": "{{endpoint}}"
+              "legendFormat": "{{ "{{endpoint}}" }}"
             }
           ]
         },
@@ -35,7 +35,7 @@ data:
           "targets": [
             {
               "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
-              "legendFormat": "{{endpoint}} (p95)"
+              "legendFormat": "{{ "{{endpoint}} (p95)" }}"
             }
           ]
         },
@@ -68,7 +68,7 @@ data:
           "targets": [
             {
               "expr": "histogram_quantile(0.90, sum(rate(llm_inference_duration_seconds_bucket[5m])) by (le, model))",
-              "legendFormat": "{{model}}"
+              "legendFormat": "{{ "{{model}}" }}"
             }
           ]
         },
@@ -106,7 +106,7 @@ data:
           "targets": [
             {
               "expr": "sum(rate(container_cpu_usage_seconds_total{container!=\"\"}[2m])) by (pod) * 1000",
-              "legendFormat": "{{pod}}"
+              "legendFormat": "{{ "{{pod}}" }}"
             }
           ]
         },
@@ -117,7 +117,7 @@ data:
           "targets": [
             {
               "expr": "sum(container_memory_working_set_bytes{container!=\"\"}) by (pod) / 1024 / 1024",
-              "legendFormat": "{{pod}} (MB)"
+              "legendFormat": "{{ "{{pod}} (MB)" }}"
             }
           ]
         },
@@ -128,7 +128,7 @@ data:
           "targets": [
             {
               "expr": "kube_deployment_status_replicas{deployment=~\"mt-.*\"} or vector(2)",
-              "legendFormat": "{{deployment}} Replicas"
+              "legendFormat": "{{ "{{deployment}} Replicas" }}"
             }
           ]
         },
@@ -191,7 +191,7 @@ data:
           "targets": [
             {
               "expr": "pipeline_build_status or vector(1)",
-              "legendFormat": "{{stage}}"
+              "legendFormat": "{{ "{{stage}}" }}"
             }
           ]
         }
