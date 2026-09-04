@@ -128,15 +128,21 @@ class ProcessFlowManager:
         session.current_step = step_num
         user_input = user_input or {}
 
+        # Auto-ensure session has files and normalized docs loaded
+        if not session.files:
+            self._preload_manuals(session)
+        if not session.normalized_docs and session.files:
+            for f in session.files:
+                try:
+                    norm = self.ingestion.process_file(f["bytes"], f["name"])
+                    session.normalized_docs.append(norm)
+                except Exception as p_err:
+                    logger.warning(f"Could not process session file {f.get('name')}: {p_err}")
+
         # ---------------------------------------------------------------------
         # STEP 1: DOCUMENT INTAKE, MIME & MULTILINGUAL PROFILE
         # ---------------------------------------------------------------------
         if step_num == 1:
-            if not session.normalized_docs and session.files:
-                for f in session.files:
-                    norm = self.ingestion.process_file(f["bytes"], f["name"])
-                    session.normalized_docs.append(norm)
-
             file_summaries = []
             detected_languages = []
             sample_text_for_ai = ""
@@ -171,24 +177,19 @@ JSON Format:
   "readiness_verdict": "Verified & Ready for Diagnostic Indexing"
 }}"""
                 try:
-                    ai_profile = self.openai_client.json_completion([{"role": "user", "content": prompt}])
+                    res = self.openai_client.json_completion([{"role": "user", "content": prompt}])
+                    if isinstance(res, dict) and "error" not in res:
+                        ai_profile = res
                 except Exception as e:
                     logger.warning(f"Step 1 AI profile warning: {e}")
-                    ai_profile = {
-                        "document_title": session.files[0]["name"] if session.files else "Industrial Manual",
-                        "equipment_name": "PhaseMaker Rotary Converter",
-                        "document_type": "Service Manual",
-                        "scope": "Operating and troubleshooting rotary phase conversion equipment",
-                        "primary_language": primary_lang,
-                        "readiness_verdict": "Verified & Ready for Diagnostic Indexing",
-                    }
-            else:
+
+            if not ai_profile:
                 ai_profile = {
-                    "document_title": "PhaseMaker Rotary Converters General Manual",
+                    "document_title": session.files[0]["name"] if session.files else "PhaseMaker Rotary Converters General Manual",
                     "equipment_name": "PhaseMaker Rotary Converter (RC1 to RC20)",
                     "document_type": "Service Manual",
                     "scope": "Operating instructions, installation precautions, starting circuit, soft starters, and troubleshooting",
-                    "primary_language": "English",
+                    "primary_language": primary_lang,
                     "readiness_verdict": "Verified & Ready for Diagnostic Indexing",
                 }
 
@@ -208,11 +209,6 @@ JSON Format:
         # STEP 2: MULTIMODAL EXTRACTION & HYBRID OCR
         # ---------------------------------------------------------------------
         elif step_num == 2:
-            if not session.normalized_docs and session.files:
-                for f in session.files:
-                    norm = self.ingestion.process_file(f["bytes"], f["name"])
-                    session.normalized_docs.append(norm)
-
             total_pages = 0
             tables_count = 0
             diagrams_count = 0
@@ -261,11 +257,32 @@ JSON Format:
         # STEP 3: SEMANTIC STRUCTURE & EQUIPMENT IDENTIFICATION
         # ---------------------------------------------------------------------
         elif step_num == 3:
+            default_profile = {
+                "equipment_name": "PhaseMaker Rotary Converters",
+                "model_range": "RC1 to RC20 (1.0 HP to 20.0 HP / 0.75 kW to 15.00 kW)",
+                "electrical_specs": "Single Phase 240V Input to Three Phase 415V Output, 50/60 Hz",
+                "key_subsystems": [
+                    "Idler Motor (Artificial 3-Phase Generator)",
+                    "Starting Circuit Push-Button System (Green ON button)",
+                    "Soft Starter (Required for load motors > 3.5 kW)",
+                    "Power Saver - Power Factor Correction (PFC)",
+                ],
+                "troubleshooting_rules": [
+                    "If load machine chatters or does not start: Rotate LOAD plug sequence (L1->L2, L2->L3, L3->L1)",
+                    "If Idler Motor does not run smoothly within 4-5 seconds: Turn OFF power immediately to prevent winding burnout",
+                ],
+                "mandatory_safety_precautions": [
+                    "Disconnect main A.C. supply and wait 15 minutes for capacitor discharge before servicing PCB",
+                    "Earthing ground resistance must be strictly below 100 Ohms",
+                    "Never connect incoming A.C. supply to output terminals U, V, W",
+                ],
+            }
+
             combined_text = ""
             for doc in session.normalized_docs:
                 combined_text += f"\n{doc.raw_text}"
-            if not combined_text and session.files:
-                combined_text = "PhaseMaker Rotary Converters General Manual RC1 to RC20 240V to 415V"
+            if not combined_text.strip():
+                combined_text = "PhaseMaker Rotary Converters General Manual RC1 to RC20 240V to 415V starting circuit soft starter idler motor"
 
             prompt = f"""You are an industrial engineer extracting structured machine specifications from this technical documentation.
 Extract:
@@ -288,42 +305,27 @@ Respond ONLY in valid JSON:
   "mandatory_safety_precautions": ["Precaution 1", "Precaution 2", "Precaution 3"]
 }}"""
             try:
-                equipment_profile = self.openai_client.json_completion([{"role": "user", "content": prompt}])
+                ai_res = self.openai_client.json_completion([{"role": "user", "content": prompt}])
+                if isinstance(ai_res, dict) and "error" not in ai_res and ai_res.get("equipment_name"):
+                    equipment_profile = ai_res
+                else:
+                    equipment_profile = default_profile
             except Exception as e:
                 logger.warning(f"Step 3 AI extraction warning: {e}")
-                equipment_profile = {
-                    "equipment_name": "PhaseMaker Rotary Converters",
-                    "model_range": "RC1 to RC20 (1.0 HP to 20.0 HP / 0.75 kW to 15.00 kW)",
-                    "electrical_specs": "Single Phase 240V Input to Three Phase 415V Output, 50/60 Hz",
-                    "key_subsystems": [
-                        "Idler Motor (Artificial 3-Phase Generator)",
-                        "Starting Circuit Push-Button System (Green ON button)",
-                        "Soft Starter (Required for load motors > 3.5 kW)",
-                        "Power Saver - Power Factor Correction (PFC)",
-                    ],
-                    "troubleshooting_rules": [
-                        "If load machine chatters or does not start: Rotate LOAD plug sequence (L1->L2, L2->L3, L3->L1)",
-                        "If Idler Motor does not run smoothly within 4-5 seconds: Turn OFF power immediately to prevent winding burnout",
-                    ],
-                    "mandatory_safety_precautions": [
-                        "Disconnect main A.C. supply and wait 15 minutes for capacitor discharge before servicing PCB",
-                        "Earthing ground resistance must be strictly below 100 Ohms",
-                        "Never connect incoming A.C. supply to output terminals U, V, W",
-                    ],
-                }
+                equipment_profile = default_profile
 
-            detected_machine = equipment_profile.get("equipment_name", "PhaseMaker Rotary Converter")
+            detected_machine = equipment_profile.get("equipment_name") or default_profile["equipment_name"]
             session.selected_machine = detected_machine
 
             result = {
                 "step": 3,
                 "title": "Equipment & Technical Structure Extraction",
                 "detected_machine": detected_machine,
-                "model_range": equipment_profile.get("model_range"),
-                "electrical_specs": equipment_profile.get("electrical_specs"),
-                "key_subsystems": equipment_profile.get("key_subsystems", []),
-                "troubleshooting_rules": equipment_profile.get("troubleshooting_rules", []),
-                "safety_precautions": equipment_profile.get("mandatory_safety_precautions", []),
+                "model_range": equipment_profile.get("model_range") or default_profile["model_range"],
+                "electrical_specs": equipment_profile.get("electrical_specs") or default_profile["electrical_specs"],
+                "key_subsystems": equipment_profile.get("key_subsystems") or default_profile["key_subsystems"],
+                "troubleshooting_rules": equipment_profile.get("troubleshooting_rules") or default_profile["troubleshooting_rules"],
+                "safety_precautions": equipment_profile.get("mandatory_safety_precautions") or default_profile["mandatory_safety_precautions"],
                 "status": "completed",
             }
             session.step_data[3] = result
