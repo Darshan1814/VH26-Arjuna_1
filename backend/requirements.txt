@@ -28,7 +28,8 @@ sentence-transformers==3.3.1
 torch>=2.5.1
 transformers==4.47.1
 
-# === OpenAI Integration ===
+# === Groq & OpenAI Integration ===
+groq>=0.9.0
 openai>=1.50.0
 
 # === Reporting ===

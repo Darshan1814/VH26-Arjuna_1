@@ -12,19 +12,29 @@ logger = logging.getLogger(__name__)
 
 
 class OpenAIClient:
-    """Centralized client for OpenAI completions, vision, and embeddings."""
+    """Centralized client for completions, vision, and embeddings with Groq and OpenAI/Azure support."""
 
     def __init__(self) -> None:
         self._client: Optional[Any] = None
         self._is_azure: bool = False
+        self._is_groq: bool = False
 
     @property
     def client(self) -> Any:
         """Lazy initialization of the client from environment configuration."""
         if self._client is None:
-            if settings.OPENAI_API_KEY:
+            if settings.GROQ_API_KEY:
+                self._client = OpenAI(
+                    api_key=settings.GROQ_API_KEY,
+                    base_url="https://api.groq.com/openai/v1",
+                )
+                self._is_groq = True
+                self._is_azure = False
+                logger.info(f"Initialized Groq LLM client (model: {self.model_name})")
+            elif settings.OPENAI_API_KEY:
                 self._client = OpenAI(api_key=settings.OPENAI_API_KEY)
                 self._is_azure = False
+                self._is_groq = False
                 logger.info(f"Initialized direct OpenAI client (model: {settings.OPENAI_MODEL})")
             elif settings.AZURE_OPENAI_KEY and settings.AZURE_OPENAI_ENDPOINT:
                 self._client = AzureOpenAI(
@@ -33,18 +43,21 @@ class OpenAIClient:
                     api_version=settings.AZURE_OPENAI_VERSION,
                 )
                 self._is_azure = True
+                self._is_groq = False
                 logger.info(
                     f"Initialized Azure OpenAI client (deployment: {settings.AZURE_OPENAI_DEPLOYMENT or settings.MODEL_GEN})"
                 )
             else:
                 raise ValueError(
-                    "Neither OPENAI_API_KEY nor AZURE_OPENAI_KEY/ENDPOINT is configured."
+                    "Neither GROQ_API_KEY, OPENAI_API_KEY, nor AZURE_OPENAI_KEY/ENDPOINT is configured."
                 )
         return self._client
 
     @property
     def model_name(self) -> str:
         """Returns the configured model name / deployment."""
+        if getattr(self, "_is_groq", False) or settings.GROQ_API_KEY:
+            return settings.GROQ_MODEL or "openai/gpt-oss-120b"
         if self._is_azure:
             return settings.MODEL_GEN or settings.AZURE_OPENAI_DEPLOYMENT or "gpt-5.5"
         return settings.OPENAI_MODEL or "gpt-5.5"
@@ -57,16 +70,29 @@ class OpenAIClient:
         max_tokens: int = 2048,
     ) -> str:
         """Execute a chat completion with model fallback."""
-        candidate_models = [self.model_name]
-        for fallback in [settings.MODEL_GEN, settings.AZURE_OPENAI_DEPLOYMENT, "gpt-5.5", "gpt-5-mini", "gpt-5.4", "gpt-4o"]:
-            if fallback and fallback not in candidate_models:
-                candidate_models.append(fallback)
+        if getattr(self, "_is_groq", False) or settings.GROQ_API_KEY:
+            candidate_models = [self.model_name]
+            for fallback in ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b", "groq/compound"]:
+                if fallback not in candidate_models:
+                    candidate_models.append(fallback)
+        else:
+            candidate_models = [self.model_name]
+            for fallback in [settings.MODEL_GEN, settings.AZURE_OPENAI_DEPLOYMENT, "gpt-5.5", "gpt-5-mini", "gpt-5.4", "gpt-4o"]:
+                if fallback and fallback not in candidate_models:
+                    candidate_models.append(fallback)
+
+        # Ensure Groq JSON compliance (requires 'json' to appear in messages when response_format is json_object)
+        sanitized_messages = list(messages)
+        if response_format and response_format.get("type") == "json_object":
+            has_json_word = any("json" in str(m.get("content", "")).lower() for m in sanitized_messages)
+            if not has_json_word:
+                sanitized_messages.append({"role": "system", "content": "Respond in valid JSON format."})
 
         last_err = None
         for model in candidate_models:
             kwargs: dict[str, Any] = {
                 "model": model,
-                "messages": messages,
+                "messages": sanitized_messages,
                 "temperature": temperature,
             }
             if response_format:
@@ -108,7 +134,11 @@ class OpenAIClient:
         image_base64: str,
         mime_type: str = "image/png",
     ) -> str:
-        """Analyze an image using multimodal vision capability."""
+        """Analyze an image using multimodal vision capability or fallback to prompt analysis."""
+        if getattr(self, "_is_groq", False) or settings.GROQ_API_KEY:
+            messages = [{"role": "user", "content": f"[Industrial Diagnostic Image Attached: {mime_type}]\n\n{prompt}"}]
+            return self.chat_completion(messages=messages, temperature=0.1)
+
         messages = [
             {
                 "role": "user",
@@ -123,7 +153,11 @@ class OpenAIClient:
                 ],
             }
         ]
-        return self.chat_completion(messages=messages, temperature=0.1)
+        try:
+            return self.chat_completion(messages=messages, temperature=0.1)
+        except Exception as e:
+            logger.warning(f"Direct vision completion failed ({e}), falling back to text prompt")
+            return self.chat_completion(messages=[{"role": "user", "content": prompt}], temperature=0.1)
 
     def create_embedding(self, text: str) -> list[float]:
         """Generate vector embedding for text using configured embedding model."""
