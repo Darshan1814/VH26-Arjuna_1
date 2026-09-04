@@ -31,6 +31,13 @@ spec:
                 name: {{ include "mt-system.fullname" . }}-backend
                 port:
                   number: {{ .Values.backend.service.port }}
+          - path: /metrics
+            pathType: Exact
+            backend:
+              service:
+                name: {{ include "mt-system.fullname" . }}-backend
+                port:
+                  number: {{ .Values.backend.service.port }}
           - path: /
             pathType: Prefix
             backend:

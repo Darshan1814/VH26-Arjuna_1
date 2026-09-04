@@ -1,0 +1,22 @@
+{{- if .Values.monitoring.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mt-system.fullname" . }}-grafana
+  labels:
+    app.kubernetes.io/component: monitoring-grafana
+    {{- include "mt-system.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.monitoring.grafana.serviceType }}
+  ports:
+    - port: {{ .Values.monitoring.grafana.port }}
+      targetPort: 3000
+      protocol: TCP
+      name: http
+      {{- if eq .Values.monitoring.grafana.serviceType "NodePort" }}
+      nodePort: {{ .Values.monitoring.grafana.nodePort }}
+      {{- end }}
+  selector:
+    app.kubernetes.io/component: monitoring-grafana
+    app.kubernetes.io/name: {{ include "mt-system.name" . }}
+{{- end }}
