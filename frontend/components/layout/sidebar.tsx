@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/context/language-context";
 import { useSidebar } from "@/context/sidebar-context";
+import { ArjunaSarthiLogo } from "@/components/branding/arjuna-sarthi-logo";
 
 export function Sidebar() {
   const pathname = usePathname();
@@ -33,6 +34,15 @@ export function Sidebar() {
       icon: MessageSquare,
       isExternal: false,
       desc: "Interactive troubleshooting",
+    },
+    {
+      href: "/arjuna-sarthi",
+      label: t("Arjuna Sarthi"),
+      icon: null,
+      isCustomLogo: true,
+      badge: "NEW EXT",
+      isExternal: false,
+      desc: "AI Web Intelligence Extension",
     },
     {
       href: "/what-if",
@@ -188,15 +198,26 @@ export function Sidebar() {
                       : "bg-[var(--color-border-subtle)] text-[var(--color-text-secondary)] group-hover:bg-[var(--color-border)] group-hover:text-[var(--color-text)]"
                   }`}
                 >
-                  <Icon className="h-4 w-4" />
+                  {link.isCustomLogo ? (
+                    <ArjunaSarthiLogo size="sm" animate={true} />
+                  ) : (
+                    link.icon && <link.icon className="h-4 w-4" />
+                  )}
                 </div>
 
                 {/* Text Label & Description */}
                 {(!isCollapsed || isMobileOpen) && (
                   <div className="flex flex-col min-w-0 flex-1 text-left">
-                    <span className={`truncate font-semibold ${isActive ? "text-white" : "text-[var(--color-text)]"}`}>
-                      {link.label}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className={`truncate font-semibold ${isActive ? "text-white" : "text-[var(--color-text)]"}`}>
+                        {link.label}
+                      </span>
+                      {link.badge && (
+                        <span className="px-1 py-0.2 rounded text-[8px] font-extrabold bg-amber-400/20 text-amber-500 border border-amber-400/40 tracking-wider">
+                          {link.badge}
+                        </span>
+                      )}
+                    </div>
                     <span
                       className={`truncate text-[10px] ${
                         isActive ? "text-white/80" : "text-[var(--color-text-muted)]"

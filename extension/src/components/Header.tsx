@@ -1,5 +1,6 @@
 import React from "react";
-import { Settings, Compass } from "lucide-react";
+import { Settings } from "lucide-react";
+import { ArjunaSarthiLogo } from "./ArjunaSarthiLogo";
 
 interface HeaderProps {
   onOpenSettings: () => void;
@@ -16,16 +17,8 @@ export const Header: React.FC<HeaderProps> = ({
     <header className="sticky top-0 z-20 flex items-center justify-between border-b border-slate-200 dark:border-slate-800 bg-white/95 dark:bg-slate-900/95 px-4 py-2.5 backdrop-blur-sm">
       {/* Brand Identity */}
       <div className="flex items-center gap-2.5 min-w-0">
-        {/* Strong Technical "A" Emblem */}
-        <div className="relative flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-950 text-white shadow-xs border border-indigo-500/30 flex-shrink-0">
-          <span className="font-bold text-base tracking-tighter text-white font-mono">
-            A
-          </span>
-          <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-cyan-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-cyan-500 border border-slate-900"></span>
-          </span>
-        </div>
+        {/* Mahabharat 'A' with 4-Layer Floating Orbit */}
+        <ArjunaSarthiLogo size="sm" animate={true} />
 
         <div className="flex flex-col min-w-0">
           <div className="flex items-center gap-1.5">
@@ -49,7 +42,7 @@ export const Header: React.FC<HeaderProps> = ({
           }`}
           title={
             backendConnected
-              ? `Connected to Groq (${activeModel || "LLM Engine"})`
+              ? `Connected to AI Engine (${activeModel || "Neural Model"})`
               : "Backend disconnected - check settings"
           }
         >
@@ -59,7 +52,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           />
           <span className="hidden sm:inline truncate max-w-[80px]">
-            {backendConnected ? "Groq Live" : "Offline"}
+            {backendConnected ? "AI Ready" : "Offline"}
           </span>
         </div>
 

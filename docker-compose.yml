@@ -10,9 +10,9 @@ services:
       - .env
     volumes:
       - ./backend:/app
-      - ./manuals:/app/manuals
-      - ./database:/app/database
-      - model_cache:/app/model_cache
+      - ${DATA_VOLUME_PATH:-.}/manuals:/app/manuals
+      - ${DATA_VOLUME_PATH:-.}/database:/app/database
+      - ${DATA_VOLUME_PATH:-.}/model_cache:/app/model_cache
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -75,7 +75,3 @@ services:
     depends_on:
       - prometheus
     restart: unless-stopped
-
-volumes:
-  model_cache:
-    driver: local

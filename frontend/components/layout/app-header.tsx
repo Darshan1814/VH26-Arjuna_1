@@ -32,6 +32,8 @@ export function AppHeader() {
     switch (path) {
       case "/chat":
         return t("Chatbot Diagnostic");
+      case "/arjuna-sarthi":
+        return t("Arjuna Sarthi Web Intelligence");
       case "/what-if":
         return t("What-If Failure Simulator");
       case "/image-analysis":

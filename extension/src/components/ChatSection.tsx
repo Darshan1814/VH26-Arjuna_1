@@ -119,7 +119,7 @@ export const ChatSection: React.FC<ChatSectionProps> = ({
                 <span>Arjuna Sarthi is reading & reasoning...</span>
               </div>
               <p className="text-[10px] text-slate-400">
-                Grounding answer strictly in the fetched webpage context via Groq.
+                Grounding answer strictly in the fetched webpage context.
               </p>
             </div>
           </div>

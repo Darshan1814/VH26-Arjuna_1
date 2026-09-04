@@ -20,7 +20,7 @@ import {
   Filter,
 } from "lucide-react";
 import { useLanguage } from "@/context/language-context";
-import { downloadDirectPDF } from "@/lib/api";
+import { getApiBase, downloadDirectPDF } from "@/lib/api";
 
 interface OEMBulletin {
   title: string;
@@ -87,7 +87,7 @@ export default function ErrorResearchPage() {
     const m = machine !== undefined ? machine : machineModel;
 
     try {
-      const res = await fetch("http://localhost:8000/api/research/search", {
+      const res = await fetch(`${getApiBase()}/api/research/search`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

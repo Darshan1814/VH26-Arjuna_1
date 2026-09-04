@@ -29,7 +29,7 @@ export const App: React.FC = () => {
   const [isAsking, setIsAsking] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [backendConnected, setBackendConnected] = useState<boolean>(true);
-  const [activeModel, setActiveModel] = useState<string>("Groq Inference Engine");
+  const [activeModel, setActiveModel] = useState<string>("Neural Inference Engine");
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
 
   // Probe backend health

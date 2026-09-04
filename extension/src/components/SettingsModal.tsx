@@ -122,7 +122,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </button>
           </div>
           <p className="text-[10px] text-slate-400">
-            Default: <code className="font-mono">http://localhost:8000</code>. Groq requests are routed securely via FastAPI.
+            Default: <code className="font-mono">http://localhost:8000</code>. AI requests are routed securely via FastAPI.
           </p>
         </div>
 
@@ -145,7 +145,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
             {testResult.model && (
               <div className="flex items-center gap-1 text-[10px] text-emerald-700 dark:text-emerald-400 font-mono">
-                <span>Active Groq Model:</span>
+                <span>Active Neural Model:</span>
                 <span className="font-bold">{testResult.model}</span>
               </div>
             )}

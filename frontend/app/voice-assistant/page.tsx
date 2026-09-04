@@ -26,6 +26,7 @@ import {
   Music,
 } from "lucide-react";
 import { useLanguage } from "@/context/language-context";
+import { getApiBase } from "@/lib/api";
 
 interface VoiceMessage {
   id: string;
@@ -75,7 +76,7 @@ export default function VoiceAssistantPage() {
       sender: "assistant",
       text: "नमस्कार! मी तुमचा इंडस्ट्रियल AI व्हॉइस असिस्टंट आहे. तुमच्या मशीनच्या समस्येबद्दल मराठी, हिंदी किंवा इंग्रजीत बोला — कोणतेही मॅन्युअल अपलोड न करता थेट संभाषण सुरू करू शकता, किंवा अधिक माहितीसाठी मॅन्युअल पीडीएफ अपलोड करू शकता.",
       spokenText: "नमस्कार! मी तुमचा इंडस्ट्रियल AI व्हॉइस असिस्टंट आहे. बोला, मी कशी मदत करू?",
-      audioUrl: "http://localhost:8000/api/voice/tts?lang=mr&text=%E0%A4%A8%E0%A4%AE%E0%A4%B8%E0%A5%8D%E0%A4%95%E0%A4%BE%E0%A4%B0!%20%E0%A4%AE%E0%A5%80%20%E0%A4%A4%E0%A5%81%E0%A4%AE%E0%A4%9 outcome%E0%A4%BE%20%E0%A4%87%E0%A4%82%E0%A4%A1%E0%A4%B8%E0%A5%8D%E0%A4%9F%E0%A5%8D%E0%A4%B0%E0%A4%BF%E0%A4%AF%E0%A4%B2%20%E0%A4%8F%E0%A4%86%E0%A4%AF%20%E0%A4%B5%E0%A5%8D%E0%A4%B9%E0%A5%89%E0%A4%87%E0%A4%B8%20%E0%A4%85%E0%A4%B8%E0%A4%BF%E0%A4%B8%E0%A5%8D%E0%A4%9F%E0%A4%82%E0%A4%9F%20%E0%A4%86%E0%A4%B9%E0%A5%87.%20%E0%A4%AC%E0%A5%8B%E0%A4%B2%E0%A4%BE%2C%20%E0%A4%AE%E0%A5%80%20%E0%A4%95%E0%A4%B6%E0%A5%80%20%E0%A4%AE%E0%A4%A6%E0%A4%A4%20%E0%A4%95%E0%A4%B0%E0%A5%82%3F",
+      audioUrl: `${getApiBase()}/api/voice/tts?lang=mr&text=%E0%A4%A8%E0%A4%AE%E0%A4%B8%E0%A5%8D%E0%A4%95%E0%A4%BE%E0%A4%B0!%20%E0%A4%AE%E0%A5%80%20%E0%A4%A4%E0%A5%81%E0%A4%AE%E0%A4%9 outcome%E0%A4%BE%20%E0%A4%87%E0%A4%82%E0%A4%A1%E0%A4%B8%E0%A5%8D%E0%A4%9F%E0%A5%8D%E0%A4%B0%E0%A4%BF%E0%A4%AF%E0%A4%B2%20%E0%A4%8F%E0%A4%86%E0%A4%AF%20%E0%A4%B5%E0%A5%8D%E0%A4%B9%E0%A5%89%E0%A4%87%E0%A4%B8%20%E0%A4%85%E0%A4%B8%E0%A4%BF%E0%A4%B8%E0%A5%8D%E0%A4%9F%E0%A4%82%E0%A4%9F%20%E0%A4%86%E0%A4%B9%E0%A5%87.%20%E0%A4%AC%E0%A5%8B%E0%A4%B2%E0%A4%BE%2C%20%E0%A4%AE%E0%A5%80%20%E0%A4%95%E0%A4%B6%E0%A5%80%20%E0%A4%AE%E0%A4%A6%E0%A4%A4%20%E0%A4%95%E0%A4%B0%E0%A5%82%3F`,
       language: "mr",
       problem: "मल्टीलिंग्युअल व्हॉइस असिस्टंट तयार (Marathi, Hindi & English)",
       actionSteps: [
@@ -306,7 +307,7 @@ export default function VoiceAssistantPage() {
         formData.append("file", uploadedFile);
       }
 
-      const res = await fetch("http://localhost:8000/api/voice/chat", {
+      const res = await fetch(`${getApiBase()}/api/voice/chat`, {
         method: "POST",
         body: formData,
       });
@@ -319,7 +320,7 @@ export default function VoiceAssistantPage() {
       setHasDocContext(Boolean(data.has_document_context));
 
       const finalAudioUrl = data.audio_url
-        ? (data.audio_url.startsWith("http") ? data.audio_url : `http://localhost:8000${data.audio_url}`)
+        ? (data.audio_url.startsWith("http") ? data.audio_url : `${getApiBase()}${data.audio_url}`)
         : undefined;
 
       const newMsgId = `ast-${Date.now()}`;

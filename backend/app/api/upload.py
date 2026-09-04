@@ -85,52 +85,60 @@ async def upload_knowledge(
                 except Exception as sql_e:
                     logger.warning(f"Could not write chunks to SQLite: {sql_e}")
 
+                # 6. Insert into Supabase if configured
                 try:
-                    mach_res = client.table("machines").select("id").eq("model_number", effective_model).execute()
-                    if mach_res.data:
-                        machine_id = mach_res.data[0]["id"]
-                    else:
-                        new_mach = client.table("machines").insert({
-                            "name": f"{effective_model} Equipment",
-                            "model_number": effective_model,
-                            "category": "Industrial Equipment",
-                        }).execute()
-                        machine_id = new_mach.data[0]["id"]
+                    client = None
+                    try:
+                        client = get_supabase_client()
+                    except Exception as client_err:
+                        logger.debug(f"Supabase client not available: {client_err}")
 
-                    # Create manual entry
-                    man_res = client.table("manuals").insert({
-                        "machine_id": machine_id,
-                        "title": filename,
-                        "filename": filename,
-                        "total_pages": len(norm_doc.items),
-                        "status": "ready",
-                    }).execute()
-                    manual_id = man_res.data[0]["id"]
+                    if client:
+                        mach_res = client.table("machines").select("id").eq("model_number", effective_model).execute()
+                        if mach_res.data:
+                            machine_id = mach_res.data[0]["id"]
+                        else:
+                            new_mach = client.table("machines").insert({
+                                "name": f"{effective_model} Equipment",
+                                "model_number": effective_model,
+                                "category": "Industrial Equipment",
+                            }).execute()
+                            machine_id = new_mach.data[0]["id"]
 
-                    # Batch embed and insert chunks
-                    texts = [c["content"] for c in chunks]
-                    embeddings = embedding_provider.embed_batch(texts)
-
-                    db_rows = []
-                    for idx, c in enumerate(chunks):
-                        db_rows.append({
-                            "manual_id": manual_id,
+                        # Create manual entry
+                        man_res = client.table("manuals").insert({
                             "machine_id": machine_id,
-                            "page_number": c["page_number"],
-                            "section": c["section"],
-                            "chunk_index": c["chunk_index"],
-                            "content": c["content"],
-                            "content_type": c.get("content_type", "text"),
-                            "error_codes": c["error_codes"],
-                            "metadata": {
-                                **c["metadata"],
-                                "source_type": norm_doc.source_type,
-                                "file_name": filename,
-                            },
-                            "embedding": embeddings[idx] if idx < len(embeddings) else None,
-                        })
+                            "title": filename,
+                            "filename": filename,
+                            "total_pages": len(norm_doc.items),
+                            "status": "ready",
+                        }).execute()
+                        manual_id = man_res.data[0]["id"]
 
-                    client.table("document_chunks").insert(db_rows).execute()
+                        # Batch embed and insert chunks
+                        texts = [c["content"] for c in chunks]
+                        embeddings = embedding_provider.embed_batch(texts)
+
+                        db_rows = []
+                        for idx, c in enumerate(chunks):
+                            db_rows.append({
+                                "manual_id": manual_id,
+                                "machine_id": machine_id,
+                                "page_number": c["page_number"],
+                                "section": c["section"],
+                                "chunk_index": c["chunk_index"],
+                                "content": c["content"],
+                                "content_type": c.get("content_type", "text"),
+                                "error_codes": c["error_codes"],
+                                "metadata": {
+                                    **c["metadata"],
+                                    "source_type": norm_doc.source_type,
+                                    "file_name": filename,
+                                },
+                                "embedding": embeddings[idx] if idx < len(embeddings) else None,
+                            })
+
+                        client.table("document_chunks").insert(db_rows).execute()
                 except Exception as db_err:
                     logger.warning(f"Database chunk insertion warning for {filename}: {db_err}")
 

@@ -4,6 +4,7 @@ import React from "react";
 import { useSidebar } from "@/context/sidebar-context";
 import { Sidebar } from "@/components/layout/sidebar";
 import { AppHeader } from "@/components/layout/app-header";
+import { MovableArjunaWidget } from "@/components/branding/movable-arjuna-widget";
 
 interface AppShellProps {
   children: React.ReactNode;
@@ -31,6 +32,9 @@ export function AppShell({ children }: AppShellProps) {
           {children}
         </main>
       </div>
+
+      {/* Floating Movable Circular Widget (draggable anywhere on page, click to open) */}
+      <MovableArjunaWidget />
     </div>
   );
 }

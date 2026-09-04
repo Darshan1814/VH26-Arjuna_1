@@ -23,6 +23,7 @@ import {
   FileCheck,
   ListOrdered,
 } from "lucide-react";
+import { getApiBase } from "@/lib/api";
 import { useLanguage } from "@/context/language-context";
 import { downloadDirectPDF } from "@/lib/api";
 
@@ -101,7 +102,7 @@ export default function DocumentIntelligencePage() {
     }
 
     try {
-      const res = await fetch("http://localhost:8000/api/document-intelligence/analyze", {
+      const res = await fetch(`${getApiBase()}/api/document-intelligence/analyze`, {
         method: "POST",
         body: formData,
       });

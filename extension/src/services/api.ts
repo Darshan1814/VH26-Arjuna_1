@@ -51,7 +51,7 @@ export async function checkBackendHealth(customUrl?: string): Promise<{
     const data = await res.json();
     return {
       status: "connected",
-      model: data.model || "Groq Inference Engine",
+      model: data.model || "Neural Inference Engine",
     };
   } catch (err: any) {
     if (err.name === "AbortError") {

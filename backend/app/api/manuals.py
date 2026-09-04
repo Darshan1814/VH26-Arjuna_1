@@ -80,50 +80,70 @@ async def upload_manual(
             detail="Only PDF files are supported",
         )
 
-    try:
-        client = get_supabase_client()
-    except ValueError:
-        raise HTTPException(status_code=503, detail="Database not configured")
+    import os
+    manual_id = str(uuid.uuid4())
+    filename = file.filename or f"manual_{manual_id}.pdf"
 
     try:
-        # Read file content
+        # 1. Read file content and persist to local attached volume / disk
         content = await file.read()
-        manual_id = str(uuid.uuid4())
-        storage_path = f"{machine_id}/{manual_id}/{file.filename}"
+        os.makedirs(settings.MANUALS_DIR, exist_ok=True)
+        disk_path = os.path.join(settings.MANUALS_DIR, filename)
+        with open(disk_path, "wb") as f:
+            f.write(content)
+        logger.info(f"Saved uploaded manual to disk at {disk_path} ({len(content)} bytes)")
 
-        # Upload to Supabase Storage
+        # 2. Record manual in local SQLite storage
         try:
-            bucket = get_storage_bucket()
-            bucket.upload(storage_path, content, {"content-type": "application/pdf"})
-        except Exception as e:
-            logger.warning(f"Storage upload failed (may not be configured): {e}")
-            storage_path = None
+            from app.core.sqlite_storage import get_sqlite_storage
+            get_sqlite_storage().save_document(
+                doc_id=manual_id,
+                filename=filename,
+                title=title,
+                file_bytes=content,
+                content_type="application/pdf",
+                machine_model=machine_id,
+            )
+            logger.info(f"Saved manual {title} to SQLite storage")
+        except Exception as sql_err:
+            logger.warning(f"Could not persist manual to SQLite: {sql_err}")
 
-        # Create manual record
-        manual_data = {
-            "id": manual_id,
-            "machine_id": machine_id,
-            "title": title,
-            "filename": file.filename,
-            "storage_path": storage_path,
-            "status": "uploaded",  # uploaded → processing → ready → error
-        }
+        # 3. Optionally sync to Supabase if configured
+        storage_path = None
+        try:
+            client = get_supabase_client()
+            if client:
+                storage_path = f"{machine_id}/{manual_id}/{filename}"
+                try:
+                    bucket = get_storage_bucket()
+                    bucket.upload(storage_path, content, {"content-type": "application/pdf"})
+                except Exception as e:
+                    logger.warning(f"Supabase storage upload failed: {e}")
+                    storage_path = None
 
-        result = client.table("manuals").insert(manual_data).execute()
-
-        logger.info(f"Manual uploaded: {title} (id={manual_id})")
+                manual_data = {
+                    "id": manual_id,
+                    "machine_id": machine_id,
+                    "title": title,
+                    "filename": filename,
+                    "storage_path": storage_path,
+                    "status": "uploaded",
+                }
+                client.table("manuals").insert(manual_data).execute()
+        except Exception as supa_err:
+            logger.info(f"Supabase sync skipped/deferred (running with local volume storage): {supa_err}")
 
         return ManualUploadResponse(
             id=manual_id,
             machine_id=machine_id,
             title=title,
-            filename=file.filename,
+            filename=filename,
             status="uploaded",
-            message="Manual uploaded successfully. Ingestion pipeline will process it.",
+            message="Manual uploaded successfully and stored on persistent storage.",
         )
 
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to upload manual: {e}")
+        logger.error(f"Failed to upload manual: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to upload manual: {str(e)}")

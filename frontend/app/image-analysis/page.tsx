@@ -20,7 +20,7 @@ import {
   Cpu,
 } from "lucide-react";
 import { useLanguage } from "@/context/language-context";
-import { downloadDirectPDF } from "@/lib/api";
+import { getApiBase, downloadDirectPDF } from "@/lib/api";
 
 interface ImageAnalysisResult {
   ocr_text: string;
@@ -88,7 +88,7 @@ export default function ImageAnalysisPage() {
       if (machineHint.trim()) formData.append("machine_hint", machineHint.trim());
       if (symptoms.trim()) formData.append("symptoms", symptoms.trim());
 
-      const res = await fetch("http://localhost:8000/api/vision/analyze", {
+      const res = await fetch(`${getApiBase()}/api/vision/analyze`, {
         method: "POST",
         body: formData,
       });

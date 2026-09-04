@@ -155,7 +155,7 @@ pipeline {
                     echo "Building Frontend Production Image: ${FRONTEND_IMAGE}:${IMAGE_TAG}..."
                     docker build \
                         -f frontend/Dockerfile.prod \
-                        --build-arg NEXT_PUBLIC_API_URL=http://localhost:8000 \
+                        --build-arg NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-""} \
                         --build-arg NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL} \
                         --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_KEY} \
                         -t ${FRONTEND_IMAGE}:${IMAGE_TAG} \

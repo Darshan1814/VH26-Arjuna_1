@@ -42,10 +42,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS — allow frontend from any origin (dev, k8s, EC2)
+# CORS — allow frontend from any origin (dev, k8s, EC2 public/private IP, custom domains)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

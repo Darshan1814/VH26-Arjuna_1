@@ -87,14 +87,27 @@ sudo docker run -d --name sonarqube \
 # 11. Allow jenkins user to access docker socket and minikube
 sudo chmod 666 /var/run/docker.sock || true
 
+# 12. Attached EBS Volume Setup (Optional/Recommended for EC2)
+if [ -f "./mount-ebs-volume.sh" ]; then
+  chmod +x ./mount-ebs-volume.sh
+  echo "--> Checking for attached EBS volume..."
+  sudo ./mount-ebs-volume.sh || echo "Notice: You can run 'sudo ./mount-ebs-volume.sh [DEVICE]' anytime to mount your attached volume."
+fi
+
 echo "=========================================================="
 echo " Installation Complete! "
 echo "=========================================================="
-echo "Jenkins URL: http://<YOUR_EC2_PUBLIC_IP>:8080"
+echo "Jenkins URL:   http://<YOUR_EC2_PUBLIC_IP>:8080"
 echo "SonarQube URL: http://<YOUR_EC2_PUBLIC_IP>:9000"
+echo "App Frontend:  http://<YOUR_EC2_PUBLIC_IP>:3000"
+echo "App Backend:   http://<YOUR_EC2_PUBLIC_IP>:8000"
+echo ""
+echo "Attached Volume Mount: /mnt/data (configured in .env via DATA_VOLUME_PATH)"
 echo ""
 echo "Initial Jenkins Admin Password:"
 sudo cat /var/lib/jenkins/secrets/initialAdminPassword || true
 echo ""
-echo "Next step: Run 'minikube start --driver=docker' to start your local Kubernetes cluster!"
+echo "Next steps:"
+echo " 1. Verify your .env variables (Groq, ElevenLabs, Supabase)"
+echo " 2. Start application: docker compose up -d"
 echo "=========================================================="

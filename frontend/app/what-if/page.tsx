@@ -21,7 +21,7 @@ import {
   Download,
 } from "lucide-react";
 import { useLanguage } from "@/context/language-context";
-import { downloadDirectPDF } from "@/lib/api";
+import { getApiBase, downloadDirectPDF } from "@/lib/api";
 
 interface WhatIfQuestion {
   id: number;
@@ -101,7 +101,7 @@ export default function WhatIfSimulatorPage() {
       if (customText.trim()) formData.append("raw_text", customText.trim());
       formData.append("machine_name", machineContext.trim() || "Industrial Machinery");
 
-      const res = await fetch("http://localhost:8000/api/what-if/generate-questions", {
+      const res = await fetch(`${getApiBase()}/api/what-if/generate-questions`, {
         method: "POST",
         body: formData,
       });
@@ -130,7 +130,7 @@ export default function WhatIfSimulatorPage() {
     setSimulationResult(null);
 
     try {
-      const res = await fetch("http://localhost:8000/api/what-if/simulate", {
+      const res = await fetch(`${getApiBase()}/api/what-if/simulate`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

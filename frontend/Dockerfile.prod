@@ -23,7 +23,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
 # Build arguments for Next.js public env vars (baked at build time)
-ARG NEXT_PUBLIC_API_URL=http://localhost:8000
+# Default to empty so browser uses relative URLs (/api/*) routed through Next.js rewrites on EC2/production
+ARG NEXT_PUBLIC_API_URL=""
 ARG NEXT_PUBLIC_SUPABASE_URL
 ARG NEXT_PUBLIC_SUPABASE_ANON_KEY
 
