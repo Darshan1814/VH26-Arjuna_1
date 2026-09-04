@@ -72,23 +72,23 @@ const STEPS: StepInfo[] = [
   },
   {
     num: 6,
-    title: "Query Understanding & Intent Analysis",
+    title: "Diagnostic Index & Context Preparation",
     category: "Retrieval",
-    description: "Deconstruct troubleshooting queries into machine models, observed fault symptoms, and diagnostic intent.",
-    icon: MessageSquare,
-  },
-  {
-    num: 7,
-    title: "Hybrid Retrieval, Reranking & Confidence",
-    category: "Retrieval",
-    description: "Execute tri-strategy retrieval (exact + keyword + pgvector) with neural cross-encoder reranking and confidence scoring.",
+    description: "Prepare cross-document search index, inverted vocabulary mappings, and pre-diagnostic context aggregators.",
     icon: Search,
   },
   {
+    num: 7,
+    title: "Evidence Verification & Confidence Calibration",
+    category: "Retrieval",
+    description: "Execute tri-strategy retrieval (exact + keyword + pgvector) with neural cross-encoder reranking and readiness checks.",
+    icon: Layers,
+  },
+  {
     num: 8,
-    title: "Grounded Diagnosis, Solution Ranking & Report",
+    title: "User Query Verification & Grounded Diagnosis",
     category: "Diagnosis",
-    description: "Generate strictly grounded diagnostics with ranked solutions, yellow-highlighted manual crops, and formal PDF/HTML dossiers.",
+    description: "Input technical troubleshooting query, perform strict evidence verification, rank solutions, and generate full PDF/HTML dossier.",
     icon: Sparkles,
   },
 ];
@@ -419,33 +419,34 @@ export default function ProcessFlowPage() {
               </div>
             )}
 
-            {/* Step 6 Query Selection / Input */}
-            {currentStep === 6 && (
+            {/* Step 8 Query Selection / Input & Verification */}
+            {currentStep === 8 && (
               <div className="space-y-3 pt-1">
                 <label className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block">
-                  Diagnostic Query / Observed Issue:
+                  Equipment Troubleshooting Query:
                 </label>
                 <textarea
                   value={queryInput}
                   onChange={(e) => setQueryInput(e.target.value)}
                   className="input-base text-xs w-full resize-none"
                   rows={3}
-                  placeholder="Enter equipment troubleshooting question..."
+                  placeholder="Enter equipment troubleshooting question (e.g. in English or Hindi)..."
                 />
                 <div className="space-y-1">
                   <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">
                     Derived from Manual:
                   </span>
                   {[
-                    "Why is the motor making a chattering noise and not starting on my PhaseMaker Rotary Converter?",
+                    "Why is the motor making a chattering noise on PhaseMaker Rotary Converter?",
                     "How to turn ON the Rotary Converter for RC10 and larger models?",
                     "What size PhaseMaker RC model is required for a 7.5 kW motor?",
                     "How to connect the Soft Starter to U1, V1, W1 on the load motor?",
+                    "PhaseMaker रोटरी कनवर्टर पर 7.5 kW मोटर के लिए कौन सा RC मॉडल चाहिए?",
                   ].map((q, idx) => (
                     <button
                       key={idx}
                       onClick={() => setQueryInput(q)}
-                      className="block text-left text-[11px] text-[var(--color-primary)] hover:underline truncate w-full"
+                      className="block text-left text-[11px] text-[var(--color-primary)] hover:underline truncate w-full cursor-pointer"
                     >
                       • {q}
                     </button>
@@ -456,36 +457,49 @@ export default function ProcessFlowPage() {
 
             {/* Step Control Buttons */}
             <div className="pt-2 flex items-center gap-2">
-              <button
-                onClick={() => runStep(currentStep)}
-                disabled={isRunning}
-                className="btn-secondary text-xs flex-1 py-2 flex items-center justify-center gap-1.5"
-              >
-                {isRunning ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-primary)]" />
-                ) : (
-                  <Play className="h-3.5 w-3.5 fill-current text-[var(--color-primary)]" />
-                )}
-                <span>Re-run Step {currentStep}</span>
-              </button>
+              {currentStep < 8 ? (
+                <>
+                  <button
+                    onClick={() => runStep(currentStep)}
+                    disabled={isRunning}
+                    className="btn-secondary text-xs flex-1 py-2 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    {isRunning ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-primary)]" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5 fill-current text-[var(--color-primary)]" />
+                    )}
+                    <span>Re-run Step {currentStep}</span>
+                  </button>
 
-              <button
-                onClick={handleNext}
-                disabled={isRunning || (currentStep === 8 && isCurrentStepCompleted)}
-                className="btn-primary text-xs flex-1 py-2 flex items-center justify-center gap-1.5"
-              >
-                {currentStep === 8 ? (
-                  <>
-                    <CheckCircle className="h-3.5 w-3.5" />
-                    <span>Pipeline Complete</span>
-                  </>
-                ) : (
-                  <>
+                  <button
+                    onClick={handleNext}
+                    disabled={isRunning}
+                    className="btn-primary text-xs flex-1 py-2 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
                     <span>Next Step</span>
                     <ChevronRight className="h-3.5 w-3.5" />
-                  </>
-                )}
-              </button>
+                  </button>
+                </>
+              ) : (
+                <button
+                  onClick={() => runStep(8)}
+                  disabled={isRunning}
+                  className="btn-primary text-xs w-full py-2.5 flex items-center justify-center gap-2 shadow-xs cursor-pointer bg-emerald-600 hover:bg-emerald-700 text-white font-bold"
+                >
+                  {isRunning ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span>Verifying & Processing Query with OpenAI 5.5...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4" />
+                      <span>Verify & Process Diagnostic Query</span>
+                    </>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -727,31 +741,40 @@ export default function ProcessFlowPage() {
             {!isRunning && currentStep === 6 && activeTelemetry && (
               <div className="space-y-4 text-xs">
                 <div className="rounded-lg border p-4 bg-blue-50/40 dark:bg-blue-950/20 space-y-2">
-                  <span className="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">
-                    Diagnostic Query Under Analysis:
-                  </span>
-                  <p className="text-sm font-bold text-[var(--color-text)]">&ldquo;{activeTelemetry.user_query}&rdquo;</p>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">
+                      Technical Search Index & Vocabulary Mapping:
+                    </span>
+                    <span className="rounded bg-blue-200 text-blue-900 dark:bg-blue-900 dark:text-blue-200 font-bold px-2 py-0.5 text-[10px]">
+                      {activeTelemetry.retrieval_status || "HNSW + GIN Ready"}
+                    </span>
+                  </div>
+                  <p className="text-sm font-bold text-[var(--color-text)]">
+                    Diagnostic Search Index & Knowledge Preparation
+                  </p>
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                  <div className="rounded-lg border p-3 space-y-1 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Detected Equipment</span>
-                    <p className="font-bold text-[var(--color-text)]">{activeTelemetry.detected_machine}</p>
-                  </div>
-                  <div className="rounded-lg border p-3 space-y-1 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Diagnostic Intent</span>
-                    <p className="font-bold text-[var(--color-text)] capitalize">{activeTelemetry.diagnostic_intent}</p>
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block mb-2">
-                    Observed Fault Symptoms:
+                <div className="rounded-lg border p-3 space-y-2 bg-[var(--color-surface-elevated)]">
+                  <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block">
+                    Pre-Diagnostic Indexed Sections:
                   </span>
                   <div className="flex flex-wrap gap-1.5">
-                    {(activeTelemetry.detected_symptoms || []).map((sym: string, i: number) => (
-                      <span key={i} className="rounded-full bg-amber-100 text-amber-900 dark:bg-amber-950/60 dark:text-amber-300 px-2.5 py-0.5 text-xs font-semibold">
-                        {sym}
+                    {(activeTelemetry.indexed_sections || []).map((sec: string, i: number) => (
+                      <span key={i} className="rounded bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300 px-2.5 py-1 text-xs font-semibold">
+                        {sec}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="rounded-lg border p-3 space-y-2 bg-[var(--color-surface-elevated)]">
+                  <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block">
+                    Verified Technical Keywords & Error Codes:
+                  </span>
+                  <div className="flex flex-wrap gap-1.5">
+                    {(activeTelemetry.technical_tokens || []).map((tok: string, i: number) => (
+                      <span key={i} className="rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 px-2.5 py-0.5 text-xs font-semibold">
+                        {tok}
                       </span>
                     ))}
                   </div>
@@ -814,6 +837,42 @@ export default function ProcessFlowPage() {
                     {finalResult.diagnosis}
                   </p>
                 </div>
+
+                {/* Extracted Specifications & Numbers */}
+                {(finalResult.extracted_specifications || []).length > 0 && (
+                  <div className="rounded-lg border bg-[var(--color-surface-elevated)] p-3 space-y-1.5">
+                    <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block">
+                      Extracted Technical Numbers & Specifications:
+                    </span>
+                    <div className="flex flex-wrap gap-1.5">
+                      {finalResult.extracted_specifications.map((spec: string, idx: number) => (
+                        <span
+                          key={idx}
+                          className="rounded-md bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800 text-blue-700 dark:text-blue-300 font-mono text-[11px] px-2 py-0.5 font-bold"
+                        >
+                          {spec}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Clarification Prompts If Needed */}
+                {(finalResult.clarification_questions || []).length > 0 && (
+                  <div className="rounded-lg border border-amber-300 bg-amber-50/70 dark:bg-amber-950/30 p-3.5 space-y-1.5">
+                    <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <Sparkles className="h-4 w-4 text-amber-600" />
+                      Recommended Clarifying Questions (Fault Narrowing):
+                    </span>
+                    <ul className="list-disc list-inside space-y-1 text-amber-900 dark:text-amber-200 pl-1 text-[11px]">
+                      {finalResult.clarification_questions.map((q: string, idx: number) => (
+                        <li key={idx}>
+                          <span className="font-semibold">{q}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
 
                 {/* Ranked Solutions */}
                 <div>

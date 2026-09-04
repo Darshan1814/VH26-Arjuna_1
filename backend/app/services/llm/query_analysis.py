@@ -57,16 +57,22 @@ Current User Query:
 Detect and extract:
 1. "machine_model": specific machine mentioned now or established in history (e.g. "CNC-X100"). null if unknown.
 2. "error_codes": array of exact error/fault codes (e.g. ["E101"]).
-3. "symptoms": array of physical or behavioral symptoms (e.g. ["overheating", "spindle grinding noise"]).
-4. "intent": "troubleshoot", "clarification", "followup", "general_question", or "status_check".
-5. "language": language code (e.g. "en", "ja", "de").
-6. "is_followup": boolean, whether the query refers back to previously discussed machine/error.
+3. "symptoms": array of physical or behavioral symptoms (e.g. ["overheating", "chattering noise", "खड़खड़ाहट"]).
+4. "specifications": array of all extracted numbers, electrical ratings, and units (e.g. ["7.5 kW", "240V", "415V", "14.00 A", "4-5 seconds", "10 HP"]).
+5. "needs_clarification": boolean. True if the query is vague, missing critical details (e.g. which motor is failing, whether idler started, exact error message), or requires further input before safe diagnosis.
+6. "clarification_questions": array of 1-3 targeted questions to ask the user in the SAME language as the query (e.g. Hindi if query is in Hindi) to narrow down the fault safely.
+7. "intent": "troubleshoot", "clarification", "followup", "general_question", or "status_check".
+8. "language": language code (e.g. "hi", "en", "ja", "de").
+9. "is_followup": boolean, whether the query refers back to previously discussed machine/error.
 
 Respond ONLY in valid JSON:
 {{
   "machine_model": string or null,
   "error_codes": [string],
   "symptoms": [string],
+  "specifications": [string],
+  "needs_clarification": boolean,
+  "clarification_questions": [string],
   "intent": string,
   "language": string,
   "is_followup": boolean
@@ -77,11 +83,21 @@ Respond ONLY in valid JSON:
             detected_codes = list(set(result.get("error_codes", []) + regex_errors))
             detected_machine = result.get("machine_model") or (regex_machines[0] if regex_machines else None)
 
+            # Heuristic number extraction if LLM missed any
+            specs = result.get("specifications", [])
+            num_pattern = re.compile(r"\b\d+(?:\.\d+)?\s*(?:kw|hp|v|a|amp|amps|hz|rpm|sec|seconds|सेकंड|किलोवाट|वोल्ट|एम्पीयर)?\b", re.IGNORECASE)
+            for m in num_pattern.findall(query):
+                if m.strip() and m.strip() not in specs and len(m.strip()) > 1:
+                    specs.append(m.strip())
+
             return {
                 "query": query,
                 "machine_model": detected_machine,
                 "error_codes": detected_codes,
                 "symptoms": result.get("symptoms", []),
+                "specifications": specs,
+                "needs_clarification": result.get("needs_clarification", False),
+                "clarification_questions": result.get("clarification_questions", []),
                 "intent": result.get("intent", "troubleshoot"),
                 "language": result.get("language", "en"),
                 "is_followup": result.get("is_followup", False),
@@ -93,6 +109,9 @@ Respond ONLY in valid JSON:
                 "machine_model": regex_machines[0] if regex_machines else None,
                 "error_codes": regex_errors,
                 "symptoms": [],
+                "specifications": [],
+                "needs_clarification": False,
+                "clarification_questions": [],
                 "intent": "troubleshoot",
                 "language": "en",
                 "is_followup": False,

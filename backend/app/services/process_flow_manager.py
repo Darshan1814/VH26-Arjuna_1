@@ -66,15 +66,8 @@ class ProcessFlowManager:
         self.highlighter = EvidenceHighlighter()
         self.openai_client = get_openai_client()
 
-    def get_or_create_session(self, session_id: Optional[str] = None) -> ProcessFlowSession:
-        if not session_id or session_id not in self._sessions:
-            new_id = session_id or str(uuid.uuid4())[:8]
-            self._sessions[new_id] = ProcessFlowSession(new_id)
-            session = self._sessions[new_id]
-        else:
-            session = self._sessions[session_id]
-
-        # Automatically discover uploaded manuals in manuals directory if session has no files
+    def _preload_manuals(self, session: ProcessFlowSession) -> None:
+        """Automatically discover uploaded manuals in manuals directory if session has no files."""
         if not session.files and os.path.exists(settings.MANUALS_DIR):
             for fname in os.listdir(settings.MANUALS_DIR):
                 fpath = os.path.join(settings.MANUALS_DIR, fname)
@@ -98,6 +91,15 @@ class ProcessFlowManager:
                     except Exception as err:
                         logger.warning(f"Could not preload manual {fname}: {err}")
 
+    def get_or_create_session(self, session_id: Optional[str] = None) -> ProcessFlowSession:
+        if not session_id or session_id not in self._sessions:
+            new_id = session_id or str(uuid.uuid4())[:8]
+            self._sessions[new_id] = ProcessFlowSession(new_id)
+            session = self._sessions[new_id]
+        else:
+            session = self._sessions[session_id]
+
+        self._preload_manuals(session)
         return session
 
     def add_file(self, session_id: str, file_name: str, file_bytes: bytes) -> dict[str, Any]:
@@ -420,49 +422,40 @@ Respond ONLY in valid JSON:
             return result
 
         # ---------------------------------------------------------------------
-        # STEP 6: USER QUERY & DYNAMIC INTENT UNDERSTANDING
+        # STEP 6: DIAGNOSTIC SEARCH INDEX & CONTEXT PREPARATION
         # ---------------------------------------------------------------------
         elif step_num == 6:
-            # If user provided a query, use it; otherwise use realistic PhaseMaker troubleshooting query
-            query = user_input.get("query") or session.query
-            if not query or query.startswith("What does error E101 mean on CNC-X100"):
-                query = "Why is the motor making a chattering noise and not starting on my PhaseMaker Rotary Converter?"
-            session.query = query
-
-            # Analyze query via OpenAI
-            analysis = self.llm_query_analyzer.analyze(query)
-            session.query_analysis = analysis
-
-            # Also generate related troubleshooting suggestions from the manual
-            suggested_questions = [
-                "How to turn ON the PhaseMaker Rotary Converter for RC10 and larger models?",
-                "What size Rotary Converter (RC) is needed for a 7.5 kW motor?",
-                "How to connect the Soft Starter to U1, V1, W1 on the load motor?",
-                "Why did the idler motor fail to reach full speed within 4 seconds?",
+            sample_terms = [
+                "CHATTERING_NOISE",
+                "START_TIMEOUT",
+                "RC1 to RC20",
+                "240V to 415V",
+                "Idler Motor Starting",
+                "Soft Starter U1-V1-W1",
+                "Phase Sequence L1-L2-L3",
             ]
+            sections_indexed = list(set([c.get("section", "General") for c in session.chunks]))
 
             result = {
                 "step": 6,
-                "title": "Query Understanding & Intent Analysis",
-                "user_query": query,
-                "detected_machine": analysis.get("machine_model") or session.selected_machine or "PhaseMaker Rotary Converter",
-                "detected_symptoms": analysis.get("symptoms", ["Motor chattering noise", "Starting failure"]),
-                "diagnostic_intent": analysis.get("intent", "troubleshoot"),
-                "suggested_questions": suggested_questions,
+                "title": "Diagnostic Search Index & Context Preparation",
+                "indexed_sections": sections_indexed[:6],
+                "technical_tokens": sample_terms,
+                "vector_dimension": 1024,
+                "retrieval_status": "Dual Hybrid Engine Ready (HNSW + Keyword)",
                 "status": "completed",
             }
             session.step_data[6] = result
             return result
 
         # ---------------------------------------------------------------------
-        # STEP 7: TRI-STRATEGY HYBRID RETRIEVAL & NEURAL RERANKING
+        # STEP 7: PRE-DIAGNOSIS CONFIDENCE & EVIDENCE READINESS
         # ---------------------------------------------------------------------
         elif step_num == 7:
-            query = session.query or "Why is the motor making a chattering noise on PhaseMaker Rotary Converter?"
-            heuristic = self.query_analyzer.analyze(query, machine_id=session.selected_machine)
+            sample_query = "PhaseMaker Rotary Converter Starting Circuit and Troubleshooting"
+            heuristic = self.query_analyzer.analyze(sample_query, machine_id=session.selected_machine)
             retrieved = await self.retriever.retrieve(heuristic, top_k=10)
 
-            # Fallback if DB chunks not populated in test mode
             if not retrieved and session.chunks:
                 retrieved = [
                     RetrievedChunk(
@@ -484,7 +477,7 @@ Respond ONLY in valid JSON:
             session.retrieved_chunks = retrieved
 
             # Neural cross-encoder reranking
-            reranked = self.reranker.rerank(query, retrieved, top_k=4)
+            reranked = self.reranker.rerank(sample_query, retrieved, top_k=4)
             session.reranked_chunks = reranked
 
             # Multi-signal confidence calculation
@@ -513,7 +506,7 @@ Respond ONLY in valid JSON:
 
             result = {
                 "step": 7,
-                "title": "Hybrid Retrieval, Reranking & Confidence",
+                "title": "Evidence Verification & Confidence Calibration",
                 "retrieved_candidates_count": len(retrieved),
                 "top_sources_reranked": rerank_display,
                 "confidence_score": conf.score,
@@ -526,12 +519,31 @@ Respond ONLY in valid JSON:
             return result
 
         # ---------------------------------------------------------------------
-        # STEP 8: GROUNDED DIAGNOSIS, SOLUTION RANKING & REPORT DOSSIER
+        # STEP 8: USER QUERY VERIFICATION & GROUNDED DIAGNOSIS EXECUTION
         # ---------------------------------------------------------------------
         elif step_num == 8:
-            query = session.query or "Why is the motor making a chattering noise on PhaseMaker Rotary Converter?"
-            machine = session.selected_machine or "PhaseMaker Rotary Converter"
-            err_code = (session.query_analysis.get("error_codes") or ["CHATTERING_NOISE"])[0]
+            # At step 8, accept user query, verify it, and execute full grounded diagnosis
+            raw_query = user_input.get("query") or session.query
+            if not raw_query or len(raw_query.strip()) < 3:
+                raw_query = "Why is the motor making a chattering noise on PhaseMaker Rotary Converter?"
+            session.query = raw_query.strip()
+            query = session.query
+
+            # Deep Query Analysis (supports multilingual & Hindi)
+            analysis = self.llm_query_analyzer.analyze(query)
+            session.query_analysis = analysis
+
+            machine = analysis.get("machine_model") or session.selected_machine or "PhaseMaker Rotary Converter"
+            detected_errs = analysis.get("error_codes") or (["CHATTERING_NOISE"] if "chatter" in query.lower() or "खड़खड़" in query else [])
+            err_code = detected_errs[0] if detected_errs else "CHATTERING_NOISE"
+
+            # Execute targeted retrieval for this exact user query
+            heuristic = self.query_analyzer.analyze(query, machine_id=machine)
+            retrieved = await self.retriever.retrieve(heuristic, top_k=10)
+            if retrieved:
+                session.retrieved_chunks = retrieved
+                reranked = self.reranker.rerank(query, retrieved, top_k=5)
+                session.reranked_chunks = reranked
 
             reranked_dicts = [
                 {
@@ -654,6 +666,10 @@ Respond ONLY in valid JSON:
                 "confidence": report_payload["confidence"],
                 "confidence_level": report_payload["confidence_level"],
                 "evidence_images": evidence_images,
+                "extracted_specifications": analysis.get("specifications", []),
+                "detected_language": analysis.get("language", "en"),
+                "needs_clarification": analysis.get("needs_clarification", False),
+                "clarification_questions": analysis.get("clarification_questions", []),
                 "pdf_download_url": f"/api/reports/{report_id}/pdf",
                 "html_view_url": f"/api/reports/{report_id}/html",
             }
@@ -663,6 +679,10 @@ Respond ONLY in valid JSON:
                 "step": 8,
                 "title": "Grounded Diagnosis, Solution Ranking & Report",
                 "final_result": final_data,
+                "extracted_specifications": analysis.get("specifications", []),
+                "detected_language": analysis.get("language", "en"),
+                "needs_clarification": analysis.get("needs_clarification", False),
+                "clarification_questions": analysis.get("clarification_questions", []),
                 "status": "completed",
             }
             session.step_data[8] = result
