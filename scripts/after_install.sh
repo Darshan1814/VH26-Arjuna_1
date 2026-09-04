@@ -79,7 +79,9 @@ fi
 # 3. Create required runtime directories and set permissions
 # -----------------------------------------------------------------------------
 mkdir -p "$APP_DIR/manuals"
+mkdir -p "$APP_DIR/manuals/evidence"
+mkdir -p "$APP_DIR/manuals/reports"
 mkdir -p "$APP_DIR/backend/model_cache"
-chmod 777 "$APP_DIR/manuals"
+chmod -R 777 "$APP_DIR/manuals"
 
 log_success "AfterInstall completed successfully."

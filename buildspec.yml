@@ -15,8 +15,8 @@ phases:
   pre_build:
     commands:
       - echo "=== Phase: Pre-Build ==="
-      - echo "Validating Python backend syntax..."
-      - python3 -m py_compile backend/app/main.py backend/app/core/config.py
+      - echo "Validating Python backend syntax across all modules..."
+      - python3 -m compileall backend/app
       - echo "Ensuring execution permissions on deployment scripts..."
       - chmod +x scripts/*.sh || true
 

@@ -19,8 +19,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy application code
 COPY . .
 
-# Create model cache and manuals directories
-RUN mkdir -p /app/model_cache /app/manuals
+# Create model cache, manuals, evidence, and reports directories
+RUN mkdir -p /app/model_cache /app/manuals /app/manuals/evidence /app/manuals/reports
 
 ENV PYTHONUNBUFFERED=1
 ENV HF_HOME=/app/model_cache
