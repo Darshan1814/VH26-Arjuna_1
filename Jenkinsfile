@@ -86,6 +86,7 @@ pipeline {
                         script {
                             catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
                                 def sonarToken = '1f7f2e88ddd4a0c6f8b339df79648e49977e1b4c'
+                                def sonarHost = env.SONAR_HOST_URL ?: 'http://localhost:9000'
                                 try {
                                     withCredentials([string(credentialsId: env.SONAR_CREDS_ID, variable: 'JENKINS_SONAR_TOKEN')]) {
                                         sonarToken = JENKINS_SONAR_TOKEN
@@ -98,15 +99,16 @@ pipeline {
                                     if command -v sonar-scanner >/dev/null 2>&1; then
                                         sonar-scanner \
                                             -Dsonar.token="${sonarToken}" \
+                                            -Dsonar.host.url="${sonarHost}" \
                                             -Dsonar.projectKey=industrial-machine-troubleshooting-system
                                     else
                                         echo "sonar-scanner CLI not present on agent, running SonarScanner CLI via Docker with host networking..."
                                         docker run --rm --network host \
-                                            -e SONAR_HOST_URL="${SONAR_HOST_URL:-http://localhost:9000}" \
+                                            -e SONAR_HOST_URL="${sonarHost}" \
                                             -e SONAR_TOKEN="${sonarToken}" \
                                             -v "${WORKSPACE}":/usr/src \
                                             sonarsource/sonar-scanner-cli:latest \
-                                            -Dsonar.host.url="${SONAR_HOST_URL:-http://localhost:9000}" \
+                                            -Dsonar.host.url="${sonarHost}" \
                                             -Dsonar.token="${sonarToken}" \
                                             -Dsonar.projectKey=industrial-machine-troubleshooting-system || true
                                     fi
