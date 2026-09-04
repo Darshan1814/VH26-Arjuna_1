@@ -233,7 +233,20 @@ pipeline {
                 echo "===> Deploying Machine Troubleshooting System to Minikube/K8s..."
                 script {
                     sh """
-                        echo "Verifying cluster connectivity..."
+                        # Auto-fix permissions if sudo is available to jenkins
+                        sudo chmod +rx /home/ec2-user 2>/dev/null || true
+                        sudo chmod -R a+rX /home/ec2-user/.minikube /home/ec2-user/.kube 2>/dev/null || true
+
+                        # Prioritize self-contained / configured kubeconfig
+                        if [ -f "/var/lib/jenkins/.kube/config" ]; then
+                            export KUBECONFIG="/var/lib/jenkins/.kube/config"
+                        elif [ -f "\$HOME/.kube/config" ]; then
+                            export KUBECONFIG="\$HOME/.kube/config"
+                        elif [ -f "/home/ec2-user/.kube/config" ]; then
+                            export KUBECONFIG="/home/ec2-user/.kube/config"
+                        fi
+
+                        echo "Verifying cluster connectivity (KUBECONFIG=\${KUBECONFIG:-default})..."
                         kubectl cluster-info || true
 
                         echo "Upgrading or Installing Helm Release '${HELM_RELEASE}'..."
@@ -264,6 +277,14 @@ pipeline {
             steps {
                 echo "===> Checking Rollout Status, Autoscalers, and Observability..."
                 sh """
+                    if [ -f "/var/lib/jenkins/.kube/config" ]; then
+                        export KUBECONFIG="/var/lib/jenkins/.kube/config"
+                    elif [ -f "\$HOME/.kube/config" ]; then
+                        export KUBECONFIG="\$HOME/.kube/config"
+                    elif [ -f "/home/ec2-user/.kube/config" ]; then
+                        export KUBECONFIG="/home/ec2-user/.kube/config"
+                    fi
+
                     echo "Checking Backend Deployment Rollout..."
                     kubectl rollout status deployment/${HELM_RELEASE}-backend --namespace ${K8S_NAMESPACE} --timeout=180s || true
 
