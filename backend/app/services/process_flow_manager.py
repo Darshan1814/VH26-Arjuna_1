@@ -677,3 +677,7 @@ def get_flow_manager() -> ProcessFlowManager:
     if _flow_manager is None:
         _flow_manager = ProcessFlowManager()
     return _flow_manager
+
+
+get_process_flow_manager = get_flow_manager
+

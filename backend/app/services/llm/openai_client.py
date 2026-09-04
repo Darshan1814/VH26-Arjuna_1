@@ -44,40 +44,64 @@ class OpenAIClient:
 
     @property
     def model_name(self) -> str:
-        """Returns the configured model name / deployment."""
-        if self._is_azure:
-            return settings.MODEL_GEN or settings.AZURE_OPENAI_DEPLOYMENT or "gpt-5.5"
-        return settings.OPENAI_MODEL or "gpt-5.5"
+        """Returns the configured model name / deployment, defaulting to gpt-5.5."""
+        return "gpt-5.5"
 
     def chat_completion(
         self,
         messages: list[dict[str, Any]],
         response_format: Optional[dict[str, str]] = None,
         temperature: float = 0.1,
-        max_tokens: int = 2048,
+        max_tokens: int = 2500,
     ) -> str:
-        """Execute a chat completion with model fallback."""
-        candidate_models = [self.model_name]
-        for fallback in [settings.MODEL_GEN, settings.AZURE_OPENAI_DEPLOYMENT, "gpt-5.5", "gpt-5-mini", "gpt-5.4", "gpt-4o"]:
+        """Execute a chat completion with model fallback, optimized for gpt-5.5."""
+        candidate_models = ["gpt-5.5"]
+        for fallback in [settings.MODEL_GEN, settings.AZURE_OPENAI_DEPLOYMENT, "gpt-5.4", "gpt-5-mini", "gpt-4o"]:
             if fallback and fallback not in candidate_models:
                 candidate_models.append(fallback)
 
         last_err = None
         for model in candidate_models:
+            is_reasoning_or_5 = any(prefix in model.lower() for prefix in ["gpt-5", "o1", "o3", "o4"])
+
             kwargs: dict[str, Any] = {
                 "model": model,
                 "messages": messages,
-                "temperature": temperature,
             }
             if response_format:
                 kwargs["response_format"] = response_format
-            if max_tokens:
-                kwargs["max_tokens"] = max_tokens
+
+            if is_reasoning_or_5:
+                # gpt-5.5 requires max_completion_tokens (budgeting for reasoning + content)
+                kwargs["max_completion_tokens"] = max(max_tokens or 2500, 2500)
+                # gpt-5.5 only supports default temperature (1.0), omitting temperature
+            else:
+                kwargs["max_tokens"] = max_tokens or 2048
+                kwargs["temperature"] = temperature
 
             try:
                 response = self.client.chat.completions.create(**kwargs)
                 return response.choices[0].message.content or ""
             except Exception as e:
+                err_str = str(e).lower()
+                # Dynamic parameter recovery
+                if "max_tokens" in err_str and "max_completion_tokens" in err_str:
+                    try:
+                        token_val = kwargs.pop("max_tokens", 2500)
+                        kwargs["max_completion_tokens"] = max(token_val, 2500)
+                        kwargs.pop("temperature", None)
+                        response = self.client.chat.completions.create(**kwargs)
+                        return response.choices[0].message.content or ""
+                    except Exception as retry_err:
+                        e = retry_err
+                elif "temperature" in err_str and "default" in err_str:
+                    try:
+                        kwargs.pop("temperature", None)
+                        response = self.client.chat.completions.create(**kwargs)
+                        return response.choices[0].message.content or ""
+                    except Exception as retry_err:
+                        e = retry_err
+
                 last_err = e
                 logger.warning(f"Chat completion with model '{model}' failed: {e}. Trying fallback...")
 

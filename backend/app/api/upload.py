@@ -1,9 +1,12 @@
-"""Multi-format knowledge upload API endpoint."""
+"""Multi-format knowledge upload API endpoint with disk and database persistence."""
 
+import os
+import json
 import logging
 from typing import Optional
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
+from app.core.config import settings
 from app.services.ingestion.multi_loader import MultiFormatIngestionService
 from app.services.chunking.semantic_chunker import SemanticChunker
 from app.services.embeddings.embedding_provider import EmbeddingProvider
@@ -29,23 +32,42 @@ async def upload_knowledge(
     processed_docs = []
     total_chunks_stored = 0
 
+    os.makedirs(settings.MANUALS_DIR, exist_ok=True)
+
     for upload in files:
         try:
             content = await upload.read()
-            filename = upload.filename or "unknown"
+            filename = upload.filename or "unknown_manual.pdf"
+
+            # 1. Always save file to local manuals directory for PyMuPDF highlighting and retrieval
+            file_disk_path = os.path.join(settings.MANUALS_DIR, filename)
+            with open(file_disk_path, "wb") as f:
+                f.write(content)
+            logger.info(f"Saved uploaded file to disk at: {file_disk_path} ({len(content)} bytes)")
+
+            # 2. Ingest and extract structure
             norm_doc = ingestion.process_file(content, filename, machine_model)
             processed_docs.append(norm_doc.to_dict())
 
-            # Store chunks into Supabase if database is available
+            # 3. Create semantic chunks
             chunks = []
             for item in norm_doc.items:
                 chunks.extend(chunker.chunk_item(item))
 
+            # 4. Save chunks to disk cache for guaranteed retrieval
             if chunks:
+                chunks_cache_file = os.path.join(settings.MANUALS_DIR, f"{filename}.chunks.json")
+                try:
+                    with open(chunks_cache_file, "w", encoding="utf-8") as cf:
+                        json.dump(chunks, cf, indent=2)
+                    logger.info(f"Cached {len(chunks)} chunks to disk at {chunks_cache_file}")
+                except Exception as c_err:
+                    logger.warning(f"Could not write chunk cache: {c_err}")
+
+                # 5. Insert into Supabase if configured
                 try:
                     client = get_supabase_client()
-                    # Ensure machine exists or create stub
-                    effective_model = machine_model or norm_doc.machine_model or "Universal"
+                    effective_model = machine_model or norm_doc.machine_model or "PhaseMaker Rotary Converter"
                     mach_res = client.table("machines").select("id").eq("model_number", effective_model).execute()
                     if mach_res.data:
                         machine_id = mach_res.data[0]["id"]
@@ -90,12 +112,13 @@ async def upload_knowledge(
                         })
 
                     client.table("document_chunks").insert(db_rows).execute()
-                    total_chunks_stored += len(db_rows)
                 except Exception as db_err:
                     logger.warning(f"Database chunk insertion warning for {filename}: {db_err}")
 
+                total_chunks_stored += len(chunks)
+
         except Exception as e:
-            logger.error(f"Error processing upload {upload.filename}: {e}")
+            logger.error(f"Error processing upload {upload.filename}: {e}", exc_info=True)
             raise HTTPException(status_code=500, detail=f"Failed to process {upload.filename}: {str(e)}")
 
     return {

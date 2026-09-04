@@ -91,28 +91,10 @@ def _clean_json_text(text: str) -> str:
 
 
 class GenerationService:
-    """Generate troubleshooting answers using configured generation model."""
+    """Generate troubleshooting answers using OpenAI 5.5 / configured generation model."""
 
     def __init__(self) -> None:
-        self._client: Optional[AzureOpenAI] = None
-
-    @property
-    def client(self) -> AzureOpenAI:
-        """Lazy-initialize Azure OpenAI client."""
-        if self._client is None:
-            if not settings.AZURE_OPENAI_KEY or not settings.AZURE_OPENAI_ENDPOINT:
-                raise ValueError(
-                    "AZURE_OPENAI_KEY and AZURE_OPENAI_ENDPOINT must be configured in environment variables."
-                )
-
-            self._client = AzureOpenAI(
-                azure_endpoint=settings.AZURE_OPENAI_ENDPOINT,
-                api_key=settings.AZURE_OPENAI_KEY,
-                api_version=settings.AZURE_OPENAI_VERSION,
-            )
-            deployment = settings.AZURE_OPENAI_DEPLOYMENT or settings.MODEL_GEN
-            logger.info(f"Generation service initialized (deployment: {deployment})")
-        return self._client
+        pass
 
     async def generate(
         self,
@@ -120,7 +102,7 @@ class GenerationService:
         context_chunks: list[RetrievedChunk],
         conversation_history: Optional[list[dict]] = None,
     ) -> dict:
-        """Generate a structured troubleshooting response.
+        """Generate a structured troubleshooting response with OpenAI 5.5.
 
         Args:
             query: The user's question.
@@ -144,34 +126,22 @@ class GenerationService:
 
         messages.append({"role": "user", "content": user_prompt})
 
-        deployment = settings.AZURE_OPENAI_DEPLOYMENT or settings.MODEL_GEN
-
         try:
-            response = self.client.chat.completions.create(
-                model=deployment,
-                messages=messages,
-                response_format={"type": "json_object"},
-            )
-
-            response_text = response.choices[0].message.content or "{}"
-            cleaned_text = _clean_json_text(response_text)
-            parsed = json.loads(cleaned_text)
+            from app.services.llm.openai_client import get_openai_client
+            openai_client = get_openai_client()
+            parsed = openai_client.json_completion(messages)
 
             logger.info(
-                f"Response generated successfully. "
+                f"OpenAI 5.5 response generated successfully. "
                 f"Confidence: {parsed.get('confidence', 'N/A')}"
             )
-
             return parsed
 
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse generation JSON response: {e}")
+        except Exception as e:
+            logger.error(f"Generation API call failed: {e}", exc_info=True)
             return {
-                "answer": response_text if 'response_text' in locals() and response_text else "Failed to format response.",
+                "answer": f"Diagnostic reasoning encounter: {str(e)}",
                 "probable_causes": [],
                 "corrective_steps": [],
                 "confidence": 0.0,
             }
-        except Exception as e:
-            logger.error(f"Generation API call failed: {e}")
-            raise
