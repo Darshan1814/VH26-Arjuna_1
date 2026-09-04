@@ -1,22 +1,13 @@
 "use client";
 
 import React, { useState, useRef, useEffect, useMemo } from "react";
-import {
-  Globe,
-  ChevronDown,
-  Check,
-  Search,
-  Loader2,
-  X,
-  Languages,
-} from "lucide-react";
+import { ChevronDown, Check, Search, Loader2, X } from "lucide-react";
 import { useLanguage, SUPPORTED_LANGUAGES, LanguageOption } from "@/context/language-context";
 
 export function LanguageSelector() {
   const { currentLanguage, setLanguage, isTranslating } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "Indian" | "Global">("all");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -59,257 +50,126 @@ export function LanguageSelector() {
       }, 50);
     } else {
       setSearchQuery("");
-      setActiveTab("all");
     }
   }, [isOpen]);
 
-  // Filter languages based on search query & active tab
+  // Single unified list filtered by search query
   const filteredLanguages = useMemo(() => {
     const q = searchQuery.trim().toLowerCase();
-    return SUPPORTED_LANGUAGES.filter((lang) => {
-      const matchesTab =
-        activeTab === "all" || lang.region === activeTab;
-      if (!matchesTab) return false;
-      if (!q) return true;
-      return (
+    if (!q) return SUPPORTED_LANGUAGES;
+    return SUPPORTED_LANGUAGES.filter(
+      (lang) =>
         lang.name.toLowerCase().includes(q) ||
         lang.nativeName.toLowerCase().includes(q) ||
         lang.code.toLowerCase().includes(q)
-      );
-    });
-  }, [searchQuery, activeTab]);
-
-  const indianList = useMemo(
-    () => filteredLanguages.filter((l) => l.region === "Indian"),
-    [filteredLanguages]
-  );
-  const globalList = useMemo(
-    () => filteredLanguages.filter((l) => l.region === "Global"),
-    [filteredLanguages]
-  );
-
-  const renderFlag = (countryCode: string, name: string, className = "h-3.5 w-5") => {
-    return (
-      <img
-        src={`https://flagcdn.com/w40/${countryCode.toLowerCase()}.png`}
-        srcSet={`https://flagcdn.com/w80/${countryCode.toLowerCase()}.png 2x`}
-        alt={`${name} flag logo`}
-        className={`rounded-xs object-cover shadow-xs border border-black/10 dark:border-white/10 flex-shrink-0 ${className}`}
-        loading="lazy"
-      />
     );
-  };
-
-  const renderLanguageItem = (lang: LanguageOption) => {
-    const isSelected = lang.code === currentLanguage;
-    return (
-      <button
-        key={lang.code}
-        type="button"
-        onClick={() => {
-          setLanguage(lang.code);
-          setIsOpen(false);
-        }}
-        className={`group flex w-full items-center justify-between rounded-lg px-2.5 py-2 text-left text-xs transition-all duration-150 ${
-          isSelected
-            ? "bg-[var(--color-primary)] text-white shadow-sm font-medium"
-            : "text-[var(--color-text)] hover:bg-[var(--color-surface)] hover:text-[var(--color-primary)]"
-        }`}
-      >
-        <div className="flex items-center gap-2.5 min-w-0">
-          {renderFlag(lang.countryCode, lang.name, "h-3.5 w-5")}
-          <div className="flex flex-col min-w-0">
-            <span className="truncate font-medium leading-tight">
-              {lang.nativeName}
-            </span>
-            <span
-              className={`truncate text-[11px] ${
-                isSelected ? "text-white/80" : "text-[var(--color-text-muted)]"
-              }`}
-            >
-              {lang.name}
-            </span>
-          </div>
-        </div>
-
-        <div className="flex items-center gap-1.5 flex-shrink-0 ml-2">
-          <span
-            className={`rounded px-1.5 py-0.5 text-[10px] font-mono uppercase ${
-              isSelected
-                ? "bg-white/20 text-white"
-                : "bg-[var(--color-surface-elevated)] border border-[var(--color-border)] text-[var(--color-text-muted)]"
-            }`}
-          >
-            {lang.code}
-          </span>
-          {isSelected && <Check className="h-3.5 w-3.5 text-white" />}
-        </div>
-      </button>
-    );
-  };
+  }, [searchQuery]);
 
   return (
     <div className="relative inline-block text-left" ref={dropdownRef}>
-      {/* Properly Designed Main Button */}
+      {/* Clean Single Dropdown Trigger Button */}
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="group relative flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] shadow-sm hover:border-[var(--color-primary)] hover:bg-[var(--color-surface-elevated)] hover:shadow-md transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]/20"
-        title="Choose Language (70 Languages)"
+        className="flex items-center gap-2 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-2.5 py-1.5 text-xs font-medium text-[var(--color-text)] shadow-xs hover:border-[var(--color-primary)] hover:bg-[var(--color-surface-elevated)] transition-colors focus:outline-none"
+        title="Select Language (70 Available)"
         aria-expanded={isOpen}
       >
-        {/* Globe / Spinner icon */}
-        <div className="flex items-center justify-center rounded-lg bg-[var(--color-primary)]/10 p-1 text-[var(--color-primary)] group-hover:bg-[var(--color-primary)] group-hover:text-white transition-colors duration-200">
-          {isTranslating ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Globe className="h-3.5 w-3.5" />
-          )}
-        </div>
-
-        {/* Real Country Flag Logo in front of language */}
-        {renderFlag(currentLangObj.countryCode, currentLangObj.name, "h-3.5 w-5")}
-
-        <span className="hidden sm:inline font-semibold">
-          {currentLangObj.nativeName}
-        </span>
-        <span className="sm:hidden font-mono uppercase text-[11px]">
-          {currentLangObj.code}
-        </span>
-
-        {/* Region badge */}
-        <span className="hidden md:inline-flex rounded-full bg-[var(--color-surface-elevated)] border border-[var(--color-border)] px-1.5 py-0.2 text-[9px] text-[var(--color-text-muted)]">
-          {currentLangObj.region === "Indian" ? "IN" : "Global"}
-        </span>
-
+        {isTranslating ? (
+          <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-primary)]" />
+        ) : (
+          <img
+            src={`https://flagcdn.com/w40/${currentLangObj.countryCode.toLowerCase()}.png`}
+            srcSet={`https://flagcdn.com/w80/${currentLangObj.countryCode.toLowerCase()}.png 2x`}
+            alt={currentLangObj.name}
+            className="h-3.5 w-5 rounded-xs object-cover border border-black/10 dark:border-white/10"
+          />
+        )}
+        <span className="font-medium">{currentLangObj.nativeName}</span>
         <ChevronDown
-          className={`h-3 w-3 text-[var(--color-text-muted)] transition-transform duration-200 group-hover:text-[var(--color-text)] ${
-            isOpen ? "rotate-180 text-[var(--color-primary)]" : ""
+          className={`h-3 w-3 text-[var(--color-text-muted)] transition-transform duration-150 ${
+            isOpen ? "rotate-180" : ""
           }`}
         />
       </button>
 
-      {/* Expanded Modal/Popover Dropdown */}
+      {/* Single Clean Dropdown Popover */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 w-80 sm:w-96 origin-top-right rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-2.5 shadow-2xl backdrop-blur-xl z-50 animate-in fade-in zoom-in-95 duration-150">
-          {/* Header */}
-          <div className="flex items-center justify-between px-2 pb-2 pt-1 border-b border-[var(--color-border)] mb-2">
-            <div className="flex items-center gap-1.5">
-              <Languages className="h-4 w-4 text-[var(--color-primary)]" />
-              <span className="text-xs font-semibold text-[var(--color-text)]">
-                Choose Language
-              </span>
-            </div>
-            <span className="rounded-full bg-[var(--color-primary)]/10 px-2 py-0.5 text-[10px] font-medium text-[var(--color-primary)]">
-              70 Languages (15 Indian + 55 Global)
-            </span>
-          </div>
-
+        <div className="absolute right-0 mt-1.5 w-64 origin-top-right rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] shadow-xl backdrop-blur-md z-50 animate-in fade-in slide-in-from-top-1 duration-150">
           {/* Search Box */}
-          <div className="relative mb-2">
-            <Search className="absolute left-3 top-2.5 h-3.5 w-3.5 text-[var(--color-text-muted)]" />
-            <input
-              ref={searchInputRef}
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search by language, script or code..."
-              className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] py-2 pl-8 pr-7 text-xs text-[var(--color-text)] placeholder-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] transition-all"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={() => setSearchQuery("")}
-                className="absolute right-2.5 top-2.5 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            )}
+          <div className="p-2 border-b border-[var(--color-border)]">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-[var(--color-text-muted)]" />
+              <input
+                ref={searchInputRef}
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Search 70 languages..."
+                className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] py-1.5 pl-8 pr-7 text-xs text-[var(--color-text)] placeholder-[var(--color-text-muted)] focus:border-[var(--color-primary)] focus:outline-none focus:ring-1 focus:ring-[var(--color-primary)] transition-all"
+              />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 top-2 text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
           </div>
 
-          {/* Category Tabs */}
-          <div className="flex items-center gap-1 mb-2 bg-[var(--color-surface)] p-1 rounded-xl border border-[var(--color-border)]">
-            <button
-              type="button"
-              onClick={() => setActiveTab("all")}
-              className={`flex-1 rounded-lg py-1 text-center text-[11px] font-medium transition-all ${
-                activeTab === "all"
-                  ? "bg-[var(--color-primary)] text-white shadow-sm"
-                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-              }`}
-            >
-              All (70)
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("Indian")}
-              className={`flex-1 rounded-lg py-1 text-center text-[11px] font-medium transition-all ${
-                activeTab === "Indian"
-                  ? "bg-[var(--color-primary)] text-white shadow-sm"
-                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-              }`}
-            >
-              🇮🇳 Indian (15)
-            </button>
-            <button
-              type="button"
-              onClick={() => setActiveTab("Global")}
-              className={`flex-1 rounded-lg py-1 text-center text-[11px] font-medium transition-all ${
-                activeTab === "Global"
-                  ? "bg-[var(--color-primary)] text-white shadow-sm"
-                  : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-              }`}
-            >
-              🌐 Global (55)
-            </button>
-          </div>
-
-          {/* Languages Scrollable Container */}
-          <div className="max-h-72 overflow-y-auto pr-1 space-y-3 scrollbar-thin">
+          {/* Single Unified List of all 70 languages */}
+          <div className="max-h-72 overflow-y-auto p-1 space-y-0.5 scrollbar-thin">
             {filteredLanguages.length === 0 ? (
-              <div className="py-8 text-center text-xs text-[var(--color-text-muted)]">
-                No matching language found for &ldquo;{searchQuery}&rdquo;
+              <div className="py-6 text-center text-xs text-[var(--color-text-muted)]">
+                No matching language found
               </div>
             ) : (
-              <>
-                {/* Indian Languages Section */}
-                {(activeTab === "all" || activeTab === "Indian") &&
-                  indianList.length > 0 && (
-                    <div>
-                      <div className="flex items-center justify-between px-2 py-1 mb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] bg-[var(--color-surface)]/60 rounded-md">
-                        <span>Indian Languages</span>
-                        <span>{indianList.length}</span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                        {indianList.map(renderLanguageItem)}
-                      </div>
+              filteredLanguages.map((lang) => {
+                const isSelected = lang.code === currentLanguage;
+                return (
+                  <button
+                    key={lang.code}
+                    type="button"
+                    onClick={() => {
+                      setLanguage(lang.code);
+                      setIsOpen(false);
+                    }}
+                    className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-xs text-left transition-colors ${
+                      isSelected
+                        ? "bg-[var(--color-primary)] text-white font-medium shadow-xs"
+                        : "text-[var(--color-text)] hover:bg-[var(--color-surface)]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <img
+                        src={`https://flagcdn.com/w40/${lang.countryCode.toLowerCase()}.png`}
+                        srcSet={`https://flagcdn.com/w80/${lang.countryCode.toLowerCase()}.png 2x`}
+                        alt={lang.name}
+                        className="h-3.5 w-5 rounded-xs object-cover border border-black/10 dark:border-white/10 flex-shrink-0"
+                        loading="lazy"
+                      />
+                      <span className="truncate font-medium">{lang.nativeName}</span>
+                      <span
+                        className={`text-[11px] truncate ${
+                          isSelected
+                            ? "text-white/80"
+                            : "text-[var(--color-text-muted)]"
+                        }`}
+                      >
+                        ({lang.name})
+                      </span>
                     </div>
-                  )}
-
-                {/* Global Languages Section */}
-                {(activeTab === "all" || activeTab === "Global") &&
-                  globalList.length > 0 && (
-                    <div>
-                      <div className="flex items-center justify-between px-2 py-1 mb-1 text-[10px] font-semibold uppercase tracking-wider text-[var(--color-text-muted)] bg-[var(--color-surface)]/60 rounded-md">
-                        <span>Global Languages</span>
-                        <span>{globalList.length}</span>
-                      </div>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-1">
-                        {globalList.map(renderLanguageItem)}
-                      </div>
-                    </div>
-                  )}
-              </>
+                    {isSelected && (
+                      <Check className="h-3.5 w-3.5 flex-shrink-0 ml-1.5 text-white" />
+                    )}
+                  </button>
+                );
+              })
             )}
           </div>
-
-          {/* Translating Indicator (Footer) */}
-          {isTranslating && (
-            <div className="mt-2 pt-2 border-t border-[var(--color-border)] flex items-center justify-center text-[11px] text-[var(--color-primary)] animate-pulse">
-              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />
-              <span>Translating page...</span>
-            </div>
-          )}
         </div>
       )}
     </div>
