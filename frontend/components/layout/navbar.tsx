@@ -4,10 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { MessageSquare, GitBranch, Sun, Moon, Wrench } from "lucide-react";
 import { useTheme } from "@/components/theme/theme-provider";
+import { useLanguage } from "@/context/language-context";
+import { LanguageSelector } from "@/components/layout/language-selector";
 
 export function Navbar() {
   const pathname = usePathname();
   const { resolvedTheme, setTheme, theme } = useTheme();
+  const { t } = useLanguage();
 
   const toggleTheme = () => {
     if (theme === "dark") {
@@ -18,8 +21,8 @@ export function Navbar() {
   };
 
   const navLinks = [
-    { href: "/chat", label: "Chatbot", icon: MessageSquare },
-    { href: "/process-flow", label: "Process Flow", icon: GitBranch },
+    { href: "/chat", label: t("Chatbot"), icon: MessageSquare },
+    { href: "/process-flow", label: t("Process Flow"), icon: GitBranch },
   ];
 
   return (
@@ -28,12 +31,12 @@ export function Navbar() {
         {/* Logo / App Name */}
         <Link href="/" className="flex items-center gap-2 font-semibold text-[var(--color-text)]">
           <Wrench className="h-5 w-5 text-[var(--color-primary)]" />
-          <span className="hidden sm:inline">Machine Troubleshooter</span>
+          <span className="hidden sm:inline">{t("Machine Troubleshooter")}</span>
           <span className="sm:hidden">MT</span>
         </Link>
 
-        {/* Navigation */}
-        <nav className="flex items-center gap-1">
+        {/* Navigation & Controls */}
+        <nav className="flex items-center gap-2">
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
             const Icon = link.icon;
@@ -53,18 +56,23 @@ export function Navbar() {
             );
           })}
 
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="ml-2 rounded-lg p-2 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-colors duration-150"
-            aria-label="Toggle theme"
-          >
-            {resolvedTheme === "dark" ? (
-              <Sun className="h-4 w-4" />
-            ) : (
-              <Moon className="h-4 w-4" />
-            )}
-          </button>
+          <div className="flex items-center gap-1.5 ml-1 border-l border-[var(--color-border)] pl-2">
+            {/* Language Selector Dropdown */}
+            <LanguageSelector />
+
+            {/* Theme Toggle */}
+            <button
+              onClick={toggleTheme}
+              className="rounded-lg p-2 text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)] hover:text-[var(--color-text)] transition-colors duration-150"
+              aria-label="Toggle theme"
+            >
+              {resolvedTheme === "dark" ? (
+                <Sun className="h-4 w-4" />
+              ) : (
+                <Moon className="h-4 w-4" />
+              )}
+            </button>
+          </div>
         </nav>
       </div>
     </header>

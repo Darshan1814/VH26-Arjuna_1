@@ -2,7 +2,7 @@
 setlocal EnableDelayedExpansion
 
 echo ====================================================
-echo    Machine Troubleshooter - Automated Setup & Run
+echo    Machine Troubleshooter - Automated Setup and Run
 echo ====================================================
 echo.
 
@@ -14,11 +14,11 @@ cd /d "%~dp0"
 where docker >nul 2>&1
 if %errorlevel% neq 0 (
     echo [WARNING] Docker is not found in your PATH.
-    echo [INFO] Attempting to install Docker Desktop via Windows Package Manager (winget)...
+    echo [INFO] Attempting to install Docker Desktop via Windows Package Manager [winget]...
     where winget >nul 2>&1
-    if %errorlevel% equ 0 (
-        winget install -e --id Docker.DockerDesktop --accept-source-agreements --accept-package-agreements
-        if %errorlevel% neq 0 (
+    if !errorlevel! equ 0 (
+        winget install -e --id Docker.DockerDesktop --accept-source-agreements --accept-package-agreements --disable-interactivity
+        if !errorlevel! neq 0 (
             echo [ERROR] Automatic Docker Desktop installation failed.
             echo Please install Docker Desktop manually from: https://www.docker.com/products/docker-desktop/
             pause
@@ -93,7 +93,7 @@ docker compose up --build -d
 if %errorlevel% neq 0 (
     echo [WARNING] Retrying with docker-compose legacy command...
     docker-compose up --build -d
-    if %errorlevel% neq 0 (
+    if !errorlevel! neq 0 (
         echo [ERROR] Failed to start Docker Compose services.
         pause
         exit /b 1

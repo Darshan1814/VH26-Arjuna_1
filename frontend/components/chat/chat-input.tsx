@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback } from "react";
 import { Send, Mic } from "lucide-react";
+import { useLanguage } from "@/context/language-context";
 
 interface Props {
   onSend: (message: string) => void;
@@ -9,6 +10,7 @@ interface Props {
 }
 
 export function ChatInput({ onSend, isLoading }: Props) {
+  const { t } = useLanguage();
   const [input, setInput] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -49,7 +51,7 @@ export function ChatInput({ onSend, isLoading }: Props) {
           value={input}
           onChange={handleInput}
           onKeyDown={handleKeyDown}
-          placeholder="Describe the machine issue or enter an error code..."
+          placeholder={t("Describe the machine issue or enter an error code...")}
           className="input-base resize-none pr-10"
           rows={1}
           disabled={isLoading}
@@ -57,7 +59,7 @@ export function ChatInput({ onSend, isLoading }: Props) {
         {/* Mic icon placeholder */}
         <button
           className="absolute right-3 bottom-2.5 text-[var(--color-text-muted)] hover:text-[var(--color-text-secondary)] transition-colors"
-          title="Voice input (coming soon)"
+          title={t("Voice input (coming soon)")}
           type="button"
         >
           <Mic className="h-4 w-4" />
@@ -68,7 +70,7 @@ export function ChatInput({ onSend, isLoading }: Props) {
         onClick={handleSubmit}
         disabled={!input.trim() || isLoading}
         className="btn-primary h-[42px] w-[42px] flex-shrink-0 !p-0"
-        title="Send message"
+        title={t("Send message")}
       >
         <Send className="h-4 w-4" />
       </button>

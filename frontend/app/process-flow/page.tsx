@@ -14,6 +14,7 @@ import {
   BookOpen,
   ArrowDown,
 } from "lucide-react";
+import { useLanguage } from "@/context/language-context";
 
 const flowSteps = [
   {
@@ -118,16 +119,19 @@ const flowSteps = [
 ];
 
 export default function ProcessFlowPage() {
+  const { t } = useLanguage();
+
   return (
     <div className="mx-auto max-w-3xl px-4 py-8 sm:px-6">
       {/* Header */}
       <div className="mb-8 text-center">
         <h1 className="text-2xl font-semibold text-[var(--color-text)] mb-2">
-          RAG Pipeline Architecture
+          {t("RAG Pipeline Architecture")}
         </h1>
         <p className="text-sm text-[var(--color-text-muted)] max-w-lg mx-auto">
-          How the Machine Troubleshooter processes service manuals and generates
-          cited troubleshooting answers using Retrieval-Augmented Generation.
+          {t(
+            "How the Machine Troubleshooter processes service manuals and generates cited troubleshooting answers using Retrieval-Augmented Generation."
+          )}
         </p>
       </div>
 
@@ -150,10 +154,10 @@ export default function ProcessFlowPage() {
               {/* Content */}
               <div className="flex-1 min-w-0">
                 <h3 className="text-sm font-semibold text-[var(--color-text)] mb-0.5">
-                  {step.title}
+                  {t(step.title)}
                 </h3>
                 <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">
-                  {step.description}
+                  {t(step.description)}
                 </p>
               </div>
             </div>
@@ -171,9 +175,9 @@ export default function ProcessFlowPage() {
       {/* Footer note */}
       <div className="mt-8 rounded-lg border border-dashed p-4 text-center">
         <p className="text-xs text-[var(--color-text-muted)]">
-          The pipeline enforces strict evidence-based answers. If retrieved evidence
-          is insufficient, the system will not hallucinate — it will clearly state
-          that it lacks information.
+          {t(
+            "The pipeline enforces strict evidence-based answers. If retrieved evidence is insufficient, the system will not hallucinate — it will clearly state that it lacks information."
+          )}
         </p>
       </div>
     </div>

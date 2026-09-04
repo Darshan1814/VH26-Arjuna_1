@@ -7,6 +7,7 @@ from app.api.machines import router as machines_router
 from app.api.manuals import router as manuals_router
 from app.api.rag import router as rag_router
 from app.api.conversations import router as conversations_router
+from app.api.translate import router as translate_router
 
 api_router = APIRouter()
 
@@ -20,3 +21,5 @@ api_router.include_router(rag_router, prefix="/api/rag", tags=["rag"])
 api_router.include_router(
     conversations_router, prefix="/api/conversations", tags=["conversations"]
 )
+api_router.include_router(translate_router, prefix="/api/translate", tags=["translate"])
+

@@ -5,9 +5,11 @@ import { useChat } from "@/hooks/use-chat";
 import { MessageBubble } from "@/components/chat/message-bubble";
 import { ChatInput } from "@/components/chat/chat-input";
 import { Wrench, Trash2 } from "lucide-react";
+import { useLanguage } from "@/context/language-context";
 
 export default function ChatPage() {
   const { messages, isLoading, sendMessage, clearChat } = useChat();
+  const { t } = useLanguage();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom on new messages
@@ -21,17 +23,17 @@ export default function ChatPage() {
       <div className="flex items-center justify-between border-b px-4 py-3">
         <div>
           <h1 className="text-lg font-semibold text-[var(--color-text)]">
-            Troubleshooting Assistant
+            {t("Troubleshooting Assistant")}
           </h1>
           <p className="text-xs text-[var(--color-text-muted)]">
-            Ask about error codes, machine issues, or troubleshooting steps
+            {t("Ask about error codes, machine issues, or troubleshooting steps")}
           </p>
         </div>
         {messages.length > 0 && (
           <button
             onClick={clearChat}
             className="rounded-lg p-2 text-[var(--color-text-muted)] hover:bg-[var(--color-surface)] hover:text-[var(--color-error)] transition-colors"
-            title="Clear conversation"
+            title={t("Clear conversation")}
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -65,17 +67,20 @@ interface EmptyStateProps {
 }
 
 function EmptyState({ onSelectSuggestion }: EmptyStateProps) {
+  const { t } = useLanguage();
+
   return (
     <div className="flex h-full flex-col items-center justify-center text-center">
       <div className="rounded-2xl bg-[var(--color-surface)] p-4 mb-4">
         <Wrench className="h-8 w-8 text-[var(--color-primary)]" />
       </div>
       <h2 className="text-lg font-semibold text-[var(--color-text)] mb-1">
-        Machine Troubleshooter
+        {t("Machine Troubleshooter")}
       </h2>
       <p className="max-w-sm text-sm text-[var(--color-text-muted)] mb-6">
-        Get diagnostic help from service manuals. Ask about error codes, 
-        symptoms, or troubleshooting procedures.
+        {t(
+          "Get diagnostic help from service manuals. Ask about error codes, symptoms, or troubleshooting procedures."
+        )}
       </p>
       <div className="grid gap-2 text-left w-full max-w-sm">
         {[
@@ -89,7 +94,7 @@ function EmptyState({ onSelectSuggestion }: EmptyStateProps) {
             className="rounded-lg border bg-[var(--color-surface-elevated)] px-4 py-2.5 text-sm text-[var(--color-text-secondary)] hover:border-[var(--color-primary)] hover:text-[var(--color-text)] transition-colors text-left"
             onClick={() => onSelectSuggestion(suggestion)}
           >
-            &ldquo;{suggestion}&rdquo;
+            &ldquo;{t(suggestion)}&rdquo;
           </button>
         ))}
       </div>
