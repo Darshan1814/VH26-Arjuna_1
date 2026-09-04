@@ -24,6 +24,11 @@ if not exist "frontend\.env.local" (
     copy /y ".env" "frontend\.env.local" >nul
 )
 
+:: Ensure backend has .env
+if not exist "backend\.env" (
+    copy /y ".env" "backend\.env" >nul
+)
+
 :: 2. Start Backend FastAPI Server
 echo [INFO] Starting Backend API on port 8000...
 start "Machine Troubleshooter - Backend (8000)" cmd /k "cd /d %~dp0backend && call .venv\Scripts\activate.bat && python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
