@@ -209,7 +209,7 @@ pipeline {
                         }
                     } catch (Exception e) {
                         echo "Jenkins Docker credential not found, using provided docker credential..."
-                        sh "echo 'Darshan@4321' | docker login -u 'darshan11111' --password-stdin"
+                        sh "echo 'Darshan@1' | docker login -u 'darshan11111' --password-stdin"
                     }
 
                     sh """

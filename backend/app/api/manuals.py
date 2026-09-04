@@ -38,34 +38,37 @@ async def get_manual_suggestions():
     import os
     suggestions = []
     
-    # Check manuals directory
+    # Check manuals directory for uploaded manuals (filter out hidden files)
     manual_names = []
     if os.path.exists(settings.MANUALS_DIR):
-        manual_names = [f for f in os.listdir(settings.MANUALS_DIR) if not f.startswith(".") and f.endswith(".pdf")]
-
-    has_phasemaker = any("phase" in f.lower() or "maker" in f.lower() or "converter" in f.lower() for f in manual_names)
-
-    if has_phasemaker or not manual_names:
-        suggestions = [
-            "Why is the load motor making a chattering noise on the PhaseMaker Rotary Converter?",
-            "How to turn ON the Rotary Converter for RC10 and larger models?",
-            "What size PhaseMaker RC model is required for a 7.5 kW motor?",
-            "How to connect the Soft Starter to U1, V1, W1 on the load motor?",
-            "What should I do if the Idler motor does not run after 4-5 seconds of pressing START?",
+        manual_names = [
+            f for f in os.listdir(settings.MANUALS_DIR)
+            if not f.startswith(".") and f.lower().endswith((".pdf", ".txt", ".docx"))
         ]
-    else:
-        first_manual = manual_names[0].replace(".pdf", "").replace("_", " ")
+
+    if manual_names:
+        first_manual = manual_names[0].rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
         suggestions = [
             f"What are the primary troubleshooting procedures in {first_manual}?",
-            f"How do I verify starting circuit voltage and current for {first_manual}?",
+            f"How do I verify starting circuits, power inputs, and wiring for {first_manual}?",
             f"What safety precautions must be followed before servicing {first_manual}?",
-            f"What are the recommended operating conditions for {first_manual}?",
+            f"What are the recommended operating specifications and limits for {first_manual}?",
+            f"How to resolve intermittent trip or overload faults on {first_manual}?",
         ]
+        active_title = manual_names[0]
+    else:
+        suggestions = [
+            "What are the primary troubleshooting steps for motor starting failure?",
+            "How do I inspect electrical input voltage, balance, and earthing?",
+            "What safety precautions must be followed before servicing control cabinets?",
+            "How to identify root causes for abnormal vibration or overheating?",
+        ]
+        active_title = "Standard Equipment Manual"
 
     return {
         "status": "success",
         "manuals_count": len(manual_names),
-        "active_manual": manual_names[0] if manual_names else "PhaseMaker Rotary Converter Manual",
+        "active_manual": active_title,
         "suggestions": suggestions,
     }
 

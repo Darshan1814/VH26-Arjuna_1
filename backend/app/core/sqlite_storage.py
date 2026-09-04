@@ -237,6 +237,38 @@ class SQLiteStorage:
                 return bytes(row["file_data"])
         return None
 
+    def get_documents_by_session(self, session_id: str) -> list[dict[str, Any]]:
+        """Fetch all documents for a specific session including file_bytes."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT id, session_id, filename, file_size, content_type, file_data, created_at, metadata
+                FROM documents WHERE session_id = ? ORDER BY created_at ASC
+                """,
+                (session_id,),
+            )
+            rows = cursor.fetchall()
+            results = []
+            for r in rows:
+                meta = {}
+                try:
+                    if r["metadata"]:
+                        meta = json.loads(r["metadata"])
+                except Exception:
+                    pass
+                results.append({
+                    "id": r["id"],
+                    "session_id": r["session_id"],
+                    "filename": r["filename"],
+                    "file_size": r["file_size"],
+                    "content_type": r["content_type"],
+                    "file_bytes": bytes(r["file_data"]) if r["file_data"] else b"",
+                    "created_at": r["created_at"],
+                    "metadata": meta,
+                })
+            return results
+
     def delete_document(self, filename: str, session_id: Optional[str] = None) -> bool:
         """Cancel and remove a document from SQLite."""
         with self._get_connection() as conn:

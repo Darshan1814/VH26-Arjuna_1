@@ -170,6 +170,12 @@ class HybridRetriever:
                     with open(os.path.join(settings.MANUALS_DIR, fname), "r", encoding="utf-8") as f:
                         cached_chunks = json.load(f)
                     for c in cached_chunks:
+                        chunk_machine = (c.get("machine_model") or "").strip()
+                        if analysis.machine_id and chunk_machine:
+                            # Strict match: do not leak unrelated equipment manuals
+                            if analysis.machine_id.lower() not in chunk_machine.lower() and chunk_machine.lower() not in analysis.machine_id.lower():
+                                continue
+
                         content_lower = c.get("content", "").lower()
                         score = sum(1 for t in terms if t in content_lower) / max(len(terms), 1)
                         if score > 0.1 or any(e.lower() in query_lower for e in c.get("error_codes", [])):
@@ -181,10 +187,10 @@ class HybridRetriever:
                                     section=c.get("section", "General"),
                                     chunk_index=c.get("chunk_index", 0),
                                     error_codes=c.get("error_codes", []),
-                                    manual_id=c.get("file_name", "PhaseMaker_Manual"),
-                                    machine_id=c.get("machine_model", "PhaseMaker Rotary Converter"),
-                                    manual_title=c.get("file_name", "PhaseMaker Rotary Converters General Manual"),
-                                    machine_model=c.get("machine_model", "PhaseMaker Rotary Converter"),
+                                    manual_id=c.get("file_name") or fname.replace(".chunks.json", ""),
+                                    machine_id=chunk_machine or analysis.machine_id or "Universal Machine",
+                                    manual_title=c.get("file_name") or fname.replace(".chunks.json", ""),
+                                    machine_model=chunk_machine or analysis.machine_id or "Universal Machine",
                                     similarity_score=min(0.7 + score * 0.25, 0.96),
                                     match_type="keyword",
                                     metadata=c.get("metadata", {}),
@@ -192,59 +198,6 @@ class HybridRetriever:
                             )
                 except Exception as err:
                     logger.warning(f"Error reading local chunk file {fname}: {err}")
-
-        # 2. If still empty and PhaseMaker manual exists on disk, supply core verified chunks
-        if not results:
-            phasemaker_chunks = [
-                {
-                    "page": 9,
-                    "section": "Troubleshooting & Chattering Noise",
-                    "content": "If your machine does not turn on or you hear chattering Noise: STOP. Turn LOAD OFF. Rotate the wiring connection of the LOAD plug for one full sequence: Wire in L1 should go to L2, Wire in L2 should go to L3, Wire in L3 should go to L1. Start your Rotary Converter as instructed above.",
-                    "error_codes": ["CHATTERING_NOISE"],
-                },
-                {
-                    "page": 8,
-                    "section": "Starting Circuit & Operation",
-                    "content": "How to turn ON the Rotary Converter (RC1 to RC10): 1) Plug in IDLER MOTOR. 2) Turn ON 240V input POWER SUPPLY. 3) Push and hold START or ON push button for a few seconds till idler motor runs smoothly at full speed (takes up to 3 seconds). Note: If Idler motor does not run normally after 4-5 seconds, please turn OFF the unit to prevent high currents in winding. 4) Once idler motor runs smoothly, 3-phase power is at load socket. 5) Ensure LOAD is switched OFF. 6) Plug in LOAD. 7) Turn ON LOAD.",
-                    "error_codes": ["START_TIMEOUT"],
-                },
-                {
-                    "page": 9,
-                    "section": "Starting Circuit (RC10 and larger)",
-                    "content": "How to Turn ON the Rotary Converter (RC10 and larger): 1) Ensure LOAD is switched OFF. 2) Plug in IDLER MOTOR and LOAD. 3) Check to ensure LOAD SWITCH located at back of controller is OFF. 4) Turn ON 240V input POWER SUPPLY. 5) Push and hold START or ON push button till idler motor runs smoothly (up to 3 seconds). 6) Turn ON LOAD SWITCH. 7) Turn ON LOAD and run machine.",
-                    "error_codes": [],
-                },
-                {
-                    "page": 10,
-                    "section": "Soft Starter for Heavy Loads",
-                    "content": "For load motors bigger than 3.5 kW, a soft starter is required. How to Connect Soft Starter: 1) Open lid of largest load motor and unscrew power cables connected to U1, V1, W1. 2) Connect corresponding cables to R, S, T of soft starter. 3) Connect output of soft starter U, V, W to U1, V1, W1 of load motor. 4) Ensure connections are tight.",
-                    "error_codes": [],
-                },
-                {
-                    "page": 5,
-                    "section": "Technical Specifications & Sizing",
-                    "content": "PhaseMaker Rotary Converter Specifications: RC1 (1.0 HP / 0.75 kW, Max 3-Phase 1.70A, Input 4A), RC10 (10.0 HP / 7.50 kW, Max 3-Phase 14.00A, Input 40A), RC20 (20.0 HP / 15.00 kW, Max 3-Phase 27.50A, Input 79A). Suitable Main Circuit Breaker should be chosen based on Supply Input Current rating.",
-                    "error_codes": [],
-                },
-            ]
-            for idx, pc in enumerate(phasemaker_chunks):
-                results.append(
-                    RetrievedChunk(
-                        id=str(uuid.uuid4())[:8],
-                        content=pc["content"],
-                        page_number=pc["page"],
-                        section=pc["section"],
-                        chunk_index=idx,
-                        error_codes=pc.get("error_codes", []),
-                        manual_id="PhaseMaker_General_Manual",
-                        machine_id="PhaseMaker_RC",
-                        manual_title="PhaseMaker Rotary Converters General Manual",
-                        machine_model="PhaseMaker Rotary Converter",
-                        similarity_score=0.91 - (idx * 0.03),
-                        match_type="keyword",
-                        metadata={"source_type": "pdf", "file_name": "FLOW-XULLQP_Phase-Maker-Converters-General-Manual.pdf"},
-                    )
-                )
 
         return results
 

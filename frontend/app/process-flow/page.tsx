@@ -110,7 +110,7 @@ export default function ProcessFlowPage() {
 
   // Interactive inputs for Step 6
   const [queryInput, setQueryInput] = useState<string>(
-    "Why is the motor making a chattering noise and not starting on my PhaseMaker Rotary Converter?"
+    "What are the primary troubleshooting steps and fault recovery procedures for this equipment?"
   );
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -154,6 +154,19 @@ export default function ProcessFlowPage() {
         [stepNum]: res.telemetry,
       }));
       setCurrentStep(stepNum);
+
+      // Dynamically adapt default query input once equipment name is identified
+      const detectedName =
+        res.telemetry?.detected_machine ||
+        res.telemetry?.document_profile?.equipment_name;
+      if (
+        detectedName &&
+        !detectedName.includes("Awaiting") &&
+        (!queryInput || queryInput.includes("this equipment"))
+      ) {
+        setQueryInput(`What are the primary troubleshooting procedures and fault resolution steps for ${detectedName}?`);
+      }
+
       return res.telemetry;
     } catch (err: any) {
       setErrorMessage(`Step ${stepNum} failed: ${err.message}`);
@@ -462,21 +475,30 @@ export default function ProcessFlowPage() {
                   <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">
                     Derived from Manual:
                   </span>
-                  {[
-                    "Why is the motor making a chattering noise on PhaseMaker Rotary Converter?",
-                    "How to turn ON the Rotary Converter for RC10 and larger models?",
-                    "What size PhaseMaker RC model is required for a 7.5 kW motor?",
-                    "How to connect the Soft Starter to U1, V1, W1 on the load motor?",
-                    "PhaseMaker रोटरी कनवर्टर पर 7.5 kW मोटर के लिए कौन सा RC मॉडल चाहिए?",
-                  ].map((q, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setQueryInput(q)}
-                      className="block text-left text-[11px] text-[var(--color-primary)] hover:underline truncate w-full cursor-pointer"
-                    >
-                      • {q}
-                    </button>
-                  ))}
+                  {(() => {
+                    const machineName =
+                      stepTelemetry[3]?.detected_machine ||
+                      stepTelemetry[1]?.document_profile?.equipment_name ||
+                      "this machine";
+                    const rules = stepTelemetry[3]?.troubleshooting_rules || [];
+                    const dynamicQueries = [
+                      `What are the primary troubleshooting procedures for ${machineName}?`,
+                      `How to inspect electrical input, starting circuits, and power lines on ${machineName}?`,
+                      `What safety precautions must be followed before servicing ${machineName}?`,
+                      ...(rules.length > 0
+                        ? rules.slice(0, 2).map((r: string) => `How to resolve: ${r.length > 60 ? r.slice(0, 57) + "..." : r}`)
+                        : [`What steps should be taken if ${machineName} fails to start or trips interlocks?`]),
+                    ];
+                    return dynamicQueries.map((q, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => setQueryInput(q)}
+                        className="block text-left text-[11px] text-[var(--color-primary)] hover:underline truncate w-full cursor-pointer"
+                      >
+                        • {q}
+                      </button>
+                    ));
+                  })()}
                 </div>
               </div>
             )}

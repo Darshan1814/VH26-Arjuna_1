@@ -24,11 +24,11 @@ async def list_machines():
         return [
             MachineResponse(
                 id="00000000-0000-0000-0000-000000000001",
-                name="PhaseMaker Rotary Converter",
-                model_number="PM-600",
-                manufacturer="Phase Technology Inc.",
-                category="Power Conversion",
-                description="Heavy-duty rotary phase converter for 3-phase machinery",
+                name="Industrial Drive Controller",
+                model_number="IDC-5000",
+                manufacturer="Apex Automation",
+                category="Power Conversion & Drives",
+                description="Heavy-duty electronic variable speed and power drive controller",
             ),
             MachineResponse(
                 id="00000000-0000-0000-0000-000000000002",

@@ -26,15 +26,14 @@ export default function ChatPage() {
 
   // Dynamic suggestions derived from the actual uploaded manual
   const [suggestions, setSuggestions] = useState<string[]>([
-    "Why is the load motor making a chattering noise on PhaseMaker Rotary Converter?",
-    "How to turn ON the Rotary Converter for RC10 and larger models?",
-    "What size PhaseMaker RC model is required for a 7.5 kW motor?",
-    "How to connect the Soft Starter to U1, V1, W1 on the load motor?",
-    "What should I do if the Idler motor does not run after 4-5 seconds of pressing START?",
+    "What are the primary troubleshooting steps for motor starting failure?",
+    "How do I inspect electrical input voltage, balance, and earthing?",
+    "What safety precautions must be followed before servicing control cabinets?",
+    "How to identify root causes for abnormal vibration or overheating?",
   ]);
   const [hasUploaded, setHasUploaded] = useState<boolean>(false);
   const [activeManualTitle, setActiveManualTitle] = useState<string>(
-    "PhaseMaker Rotary Converter Manual"
+    "Equipment Service Manual"
   );
 
   const loadSuggestions = async () => {
@@ -276,7 +275,7 @@ function EmptyState({
             className="btn-secondary w-full py-2 text-xs flex items-center justify-center gap-1.5 cursor-pointer text-[var(--color-text-secondary)]"
           >
             <BookOpen className="h-3.5 w-3.5 text-[var(--color-primary)]" />
-            <span>Use Ingested PhaseMaker RC Manual</span>
+            <span>Use Available Equipment Manual</span>
           </button>
         </div>
 
