@@ -271,7 +271,8 @@ export default function ProcessFlowPage() {
   const isCurrentStepCompleted = !!stepTelemetry[currentStep];
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 space-y-6">
+    <div className="w-full flex-1 py-6 px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-[1600px] mx-auto space-y-6">
       {/* Top Header & Session Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
         <div>
@@ -280,7 +281,7 @@ export default function ProcessFlowPage() {
               SESSION: {sessionId || "INITIALIZING"}
             </span>
             <span className="text-xs text-[var(--color-text-muted)] font-medium">
-              Step {currentStep} of 8 • Powered by OpenAI 5.5
+              Step {currentStep} of 8 • Advanced Diagnostic Engine
             </span>
           </div>
           <h1 className="text-xl font-extrabold text-[var(--color-text)] mt-1">
@@ -538,7 +539,7 @@ export default function ProcessFlowPage() {
                   {isRunning ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>Verifying & Processing Query with OpenAI 5.5...</span>
+                      <span>Verifying & Processing Diagnostic Query...</span>
                     </>
                   ) : (
                     <>
@@ -580,7 +581,7 @@ export default function ProcessFlowPage() {
                   Processing Step {currentStep}: {currentStepData.title}...
                 </p>
                 <p className="text-xs text-[var(--color-text-muted)] max-w-sm">
-                  Executing multimodal extraction, neural embeddings, or OpenAI reasoning.
+                  Executing multimodal extraction, neural embeddings, or diagnostic reasoning.
                 </p>
               </div>
             )}
@@ -607,7 +608,7 @@ export default function ProcessFlowPage() {
                   <div className="rounded-lg border p-4 bg-blue-50/40 dark:bg-blue-950/20 space-y-2">
                     <div className="flex items-center gap-1.5 font-bold text-blue-900 dark:text-blue-300">
                       <Sparkles className="h-4 w-4" />
-                      <span>OpenAI Technical Document Profile:</span>
+                      <span>Technical Document Profile:</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                       <div><strong>Equipment Name:</strong> {activeTelemetry.document_profile.equipment_name}</div>
@@ -929,7 +930,7 @@ export default function ProcessFlowPage() {
                 <div className="rounded-lg border border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30 p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
-                      Diagnostic Finding (OpenAI 5.5 Grounded):
+                      Diagnostic Finding (Verified & Grounded):
                     </span>
                     <span className="rounded bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200 px-2 py-0.5 text-[10px] font-bold">
                       HIGH Confidence (92%)
@@ -1057,6 +1058,7 @@ export default function ProcessFlowPage() {
             )}
           </div>
         </div>
+      </div>
       </div>
     </div>
   );

@@ -33,12 +33,9 @@ async def list_manuals(machine_id: Optional[str] = None):
 
 
 @router.get("/suggestions")
-async def get_manual_suggestions():
-    """Return dynamic diagnostic suggestions derived from uploaded manuals."""
+async def get_manual_suggestions(manual_id: Optional[str] = None):
+    """Return dynamic diagnostic suggestions without forcing any pre-selected manual."""
     import os
-    suggestions = []
-    
-    # Check manuals directory for uploaded manuals (filter out hidden files)
     manual_names = []
     if os.path.exists(settings.MANUALS_DIR):
         manual_names = [
@@ -46,29 +43,18 @@ async def get_manual_suggestions():
             if not f.startswith(".") and f.lower().endswith((".pdf", ".txt", ".docx"))
         ]
 
-    if manual_names:
-        first_manual = manual_names[0].rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
-        suggestions = [
-            f"What are the primary troubleshooting procedures in {first_manual}?",
-            f"How do I verify starting circuits, power inputs, and wiring for {first_manual}?",
-            f"What safety precautions must be followed before servicing {first_manual}?",
-            f"What are the recommended operating specifications and limits for {first_manual}?",
-            f"How to resolve intermittent trip or overload faults on {first_manual}?",
-        ]
-        active_title = manual_names[0]
-    else:
-        suggestions = [
-            "What are the primary troubleshooting steps for motor starting failure?",
-            "How do I inspect electrical input voltage, balance, and earthing?",
-            "What safety precautions must be followed before servicing control cabinets?",
-            "How to identify root causes for abnormal vibration or overheating?",
-        ]
-        active_title = "Standard Equipment Manual"
+    suggestions = [
+        "What are the primary troubleshooting steps for motor starting failure?",
+        "How do I inspect electrical input voltage, balance, and earthing?",
+        "What safety precautions must be followed before servicing control cabinets?",
+        "How to identify root causes for abnormal vibration or overheating?",
+        "How to troubleshoot servo drive overcurrent or ground faults?",
+    ]
 
     return {
         "status": "success",
         "manuals_count": len(manual_names),
-        "active_manual": active_title,
+        "active_manual": None,
         "suggestions": suggestions,
     }
 

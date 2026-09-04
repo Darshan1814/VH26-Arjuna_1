@@ -10,13 +10,13 @@ logger = logging.getLogger(__name__)
 
 # Common regex pattern for machine error codes (e.g., E101, ERR-402, ALARM 12)
 ERROR_CODE_REGEX = re.compile(
-    r"\b(?:E-?\d{2,4}|ERR-?\d{2,4}|ALARM\s*\d{1,4}|FAULT\s*\d{1,4}|CODE\s*[A-Z0-9-]+)\b",
+    r"\b(?:E-?\d{2,5}|ERR-?\d{2,5}|ALARM\s*\d{1,5}|FAULT\s*\d{1,5}|CODE\s*[-_]?\d{1,5}|[A-Z]{1,3}\d{2,5})\b",
     re.IGNORECASE,
 )
 
-# Common machine model patterns (e.g., CNC-X100, PRESS-Z200, LATHE-500)
+# Common machine model patterns (e.g., CNC-X100, PRESS-Z200, LATHE-500, RoboArm-R5, PackPro-200)
 MACHINE_MODEL_REGEX = re.compile(
-    r"\b(?:CNC-[A-Z0-9]+|PRESS-[A-Z0-9]+|LATHE-[A-Z0-9]+|ROBOT-[A-Z0-9]+|[A-Z]{2,5}-\d{2,4}[A-Z]?)\b",
+    r"\b(?:CNC-[A-Z0-9]+|PRESS-[A-Z0-9]+|LATHE-[A-Z0-9]+|ROBOT-[A-Z0-9]+|[A-Za-z0-9]{2,15}-[A-Za-z0-9]{1,8})\b",
     re.IGNORECASE,
 )
 
@@ -76,7 +76,7 @@ Detect and extract:
 4. "specifications": array of all extracted numbers, electrical ratings, and units (e.g. ["7.5 kW", "240V", "415V", "14.00 A", "4-5 seconds", "10 HP"]).
 5. "needs_clarification": boolean. True if the query is vague, missing critical details (e.g. which motor is failing, whether idler started, exact error message), or requires further input before safe diagnosis.
 6. "clarification_questions": array of 1-3 targeted questions to ask the user in the SAME language as the query (e.g. Hindi if query is in Hindi) to narrow down the fault safely.
-7. "intent": "troubleshoot", "clarification", "followup", "general_question", or "status_check".
+7. "intent": "troubleshoot", "clarification", "followup", "general_question", "status_check", or "security_violation" (if user asks for passwords, credentials, confidential docs, or non-machine topics).
 8. "language": language code (e.g. "hi", "en", "ja", "de").
 9. "is_followup": boolean, whether the query refers back to previously discussed machine/error.
 

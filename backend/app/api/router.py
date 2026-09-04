@@ -12,6 +12,13 @@ from app.api.process_flow import router as process_flow_router
 from app.api.reports import router as reports_router
 from app.api.evidence import router as evidence_router
 from app.api.monitoring import router as monitoring_router
+from app.api.translate import router as translate_router
+from app.api.what_if import router as what_if_router
+from app.api.vision import router as vision_router
+from app.api.voice import router as voice_router
+from app.api.research import router as research_router
+from app.api.document_intelligence import router as document_intelligence_router
+from app.api.extension import router as extension_router
 
 api_router = APIRouter()
 
@@ -28,3 +35,13 @@ api_router.include_router(process_flow_router, prefix="/api/process-flow", tags=
 api_router.include_router(reports_router, prefix="/api/reports", tags=["reports"])
 api_router.include_router(evidence_router, prefix="/api/evidence", tags=["evidence"])
 api_router.include_router(monitoring_router, prefix="/api/monitoring", tags=["monitoring"])
+api_router.include_router(translate_router, prefix="/api/translate", tags=["translation"])
+api_router.include_router(what_if_router, prefix="/api/what-if", tags=["what-if"])
+api_router.include_router(vision_router, prefix="/api/vision", tags=["vision"])
+api_router.include_router(voice_router, prefix="/api/voice", tags=["voice"])
+api_router.include_router(research_router, prefix="/api/research", tags=["research"])
+api_router.include_router(document_intelligence_router, prefix="/api/document-intelligence", tags=["document-intelligence"])
+api_router.include_router(extension_router, prefix="/api/extension", tags=["extension"])
+
+
+

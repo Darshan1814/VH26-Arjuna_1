@@ -9,7 +9,19 @@ class Settings(BaseSettings):
 
     # --- Groq Configuration ---
     GROQ_API_KEY: str = "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"
-    GROQ_MODEL: str = "qwen/qwen3.8-27b"
+    GROQ_MODEL: str = "openai/gpt-oss-20b"
+    GROQ_FAST_MODEL: str = "openai/gpt-oss-20b"
+    GROQ_REASONING_MODEL: str = "openai/gpt-oss-120b"
+    GROQ_VISION_MODEL: str = "openai/gpt-oss-20b"
+
+    # --- Serper Web Search ---
+    SERPER_API_KEY: str = ""
+
+    # --- ElevenLabs Voice Configuration ---
+    ELEVENLABS_API_KEY: str = "sk_fba5cf151cea3db4dfb248622cd85872fd097a02fa15520e"
+    ELEVENLABS_VOICE_ID: str = "gHu9GtaHOXcSqFTK06ux"
+    ELEVENLABS_FALLBACK_VOICE_ID: str = "EXAVITQu4vr4xnSDxMaL"
+    ELEVENLABS_MODEL_ID: str = "eleven_multilingual_v2"
 
     # --- OpenAI Configuration ---
     OPENAI_API_KEY: str = ""

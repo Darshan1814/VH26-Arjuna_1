@@ -215,6 +215,26 @@ export async function getReportMeta(reportId: string): Promise<ReportMeta> {
   return fetchAPI<ReportMeta>(`/api/reports/${reportId}`);
 }
 
+export async function downloadDirectPDF(payload: any, filename?: string): Promise<void> {
+  const res = await fetch("/api/reports/download-direct-pdf", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to generate PDF: ${res.statusText}`);
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || `Diagnostic_Report_${payload.report_id || Date.now()}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
+}
+
 // === Conversations ===
 
 export async function createConversation(

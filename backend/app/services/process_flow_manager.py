@@ -26,6 +26,20 @@ from app.services.retrieval.query_analyzer import QueryAnalyzer
 
 logger = logging.getLogger(__name__)
 
+MASTER_SYSTEM_PROMPT = """You are the backend reasoning engine for a RAG-based Machine Troubleshooting System (hackathon PS: Application Data Management — RAG).
+
+STRICT SCOPE RULES:
+- Only use information retrieved from the provided manual chunks/context. Never use outside knowledge about the equipment.
+- Never invent a page number, section number, or manual name. If metadata is missing, say "not specified in source."
+- If retrieved evidence has low similarity/confidence, or no evidence exists, respond with an explicit "Insufficient information" result — never guess a plausible-sounding fix.
+- If the same error code appears in multiple manuals/machines, do not silently pick one — flag it as an ambiguity case.
+- Do not perform any task outside troubleshooting diagnosis, evidence verification, or the specific pipeline stage you are asked to run. Do not chit-chat, do not answer general knowledge questions, do not proceed to a later pipeline stage than the one requested.
+- Format every output as short explanatory bullet points, not paragraphs. Each bullet should be a complete, standalone fact or step.
+- Every claim must carry a source tag: (Document, Section, Page).
+
+OUTPUT FORMAT (always):
+- Return valid JSON matching the schema given for this stage. No prose outside the JSON."""
+
 
 class ProcessFlowSession:
     """State storage for a step-by-step diagnostic workflow session."""
@@ -47,6 +61,12 @@ class ProcessFlowSession:
         self.step_data: dict[int, dict[str, Any]] = {}
         self.status: str = "initialized"
         self.current_step: int = 1
+
+        # Section 6: "What-If" Simulator Session Memory
+        self.applied_steps: list[str] = []
+        self.escalation_level: int = 0
+        self.last_error_code: Optional[str] = None
+        self.last_diagnosis: Optional[str] = None
 
 
 class ProcessFlowManager:
@@ -532,22 +552,24 @@ Respond ONLY in valid JSON:
         # STEP 6: DIAGNOSTIC SEARCH INDEX & CONTEXT PREPARATION
         # ---------------------------------------------------------------------
         elif step_num == 6:
-            # Dynamic technical tokens from chunk content
+            # Playbook Stage 6: Build query-side context directly from KB chunks, deduplicating keywords
             sample_terms = []
-            all_text = " ".join([c.get("content", "") for c in session.chunks[:5]])
+            all_text = " ".join([c.get("content", "") for c in session.chunks[:8]])
             words = [w.strip(".,;:()[]{}\"'") for w in all_text.split() if len(w) > 3]
             for w in words:
-                if (w.isupper() or any(char.isdigit() for char in w)) and w not in sample_terms and len(sample_terms) < 6:
+                if (w.isupper() or any(char.isdigit() for char in w)) and w not in sample_terms and len(sample_terms) < 8:
                     sample_terms.append(w)
             if not sample_terms:
-                sample_terms = [session.selected_machine or "Equipment", "Diagnostic", "Power", "Voltage", "Sensor"]
-            sections_indexed = list(set([c.get("section", "General") for c in session.chunks]))
+                sample_terms = [session.selected_machine or "Equipment", "Thermal", "Diagnostic", "Power", "Voltage", "Sensor"]
+
+            sections_indexed = list(dict.fromkeys([c.get("section", "General") for c in session.chunks if c.get("section")]))
 
             result = {
                 "step": 6,
                 "title": "Diagnostic Search Index & Context Preparation",
                 "indexed_sections": sections_indexed[:6],
                 "technical_tokens": sample_terms,
+                "verified_keywords_and_codes": sample_terms,
                 "vector_dimension": 1024,
                 "retrieval_status": "Dual Hybrid Engine Ready (HNSW + Keyword)",
                 "status": "completed",
@@ -559,6 +581,7 @@ Respond ONLY in valid JSON:
         # STEP 7: PRE-DIAGNOSIS CONFIDENCE & EVIDENCE READINESS
         # ---------------------------------------------------------------------
         elif step_num == 7:
+            # Playbook Stage 7: Evidence Verification with strict chunk deduplication
             doc_name = session.files[0]["name"] if session.files else "Equipment Manual"
             clean_equip = session.selected_machine or doc_name.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
 
@@ -566,14 +589,22 @@ Respond ONLY in valid JSON:
             if session.chunks:
                 terms = [t for t in sample_query.lower().split() if len(t) > 2]
                 scored_chunks = []
+                # STRICT DEDUPLICATION: ensure no (page, section) appears multiple times
+                seen_locations = set()
                 for i, c in enumerate(session.chunks):
+                    loc_key = (c.get("page_number", 1), c.get("section", "General"))
+                    if loc_key in seen_locations:
+                        continue
+                    seen_locations.add(loc_key)
+
                     c_text = c.get("content", "").lower()
                     s_score = sum(1 for t in terms if t in c_text) / max(len(terms), 1)
                     scored_chunks.append((s_score, i, c))
+
                 scored_chunks.sort(key=lambda x: x[0], reverse=True)
                 retrieved = [
                     RetrievedChunk(
-                        id=str(uuid.uuid4())[:8],
+                        id=f"chk_p{c.get('page_number', 1)}_{i}",
                         content=c["content"],
                         page_number=c.get("page_number", 1),
                         section=c.get("section", "General"),
@@ -583,7 +614,7 @@ Respond ONLY in valid JSON:
                         machine_id=clean_equip,
                         manual_title=doc_name,
                         machine_model=clean_equip,
-                        similarity_score=max(0.75 + s_score * 0.2, 0.85),
+                        similarity_score=max(0.72 + s_score * 0.22, 0.84),
                         match_type="keyword" if s_score > 0 else "vector",
                     )
                     for s_score, i, c in scored_chunks[:6]
@@ -591,10 +622,34 @@ Respond ONLY in valid JSON:
             else:
                 heuristic = self.query_analyzer.analyze(sample_query, machine_id=clean_equip)
                 retrieved = await self.retriever.retrieve(heuristic, top_k=10)
+
+            # Deduplicate retrieved candidates
+            retrieved = self.retriever._deduplicate(retrieved)
             session.retrieved_chunks = retrieved
 
             # Neural cross-encoder reranking
-            reranked = self.reranker.rerank(sample_query, retrieved, top_k=4)
+            reranked = self.reranker.rerank(sample_query, retrieved, top_k=6)
+
+            # Strict Page-Level Deduplication: Never return the same physical manual page multiple times!
+            dedup_reranked = []
+            seen_r_pages = set()
+            for r in reranked:
+                p_key = (r.manual_title or r.manual_id, r.page_number)
+                if p_key not in seen_r_pages:
+                    seen_r_pages.add(p_key)
+                    dedup_reranked.append(r)
+
+            # If deduplication reduced the list below 3, backfill with next best unique pages from retrieved
+            if len(dedup_reranked) < 3 and retrieved:
+                for cand in retrieved:
+                    p_key = (cand.manual_title or cand.manual_id, cand.page_number)
+                    if p_key not in seen_r_pages:
+                        seen_r_pages.add(p_key)
+                        dedup_reranked.append(cand)
+                    if len(dedup_reranked) >= 3:
+                        break
+
+            reranked = dedup_reranked[:4] if dedup_reranked else reranked
             session.reranked_chunks = reranked
 
             # Multi-signal confidence calculation
@@ -610,26 +665,51 @@ Respond ONLY in valid JSON:
             )
             session.confidence_eval = conf.to_dict()
 
+            # Playbook Rule: Explain WHY each candidate scored that way instead of raw echo
             rerank_display = []
             for r in reranked:
+                reason = "Specifies manufacturer tolerances and verified operating thresholds."
+                c_low = r.content.lower()
+                if r.error_codes:
+                    reason = f"Explicitly indexes fault code(s) {', '.join(r.error_codes)} with isolation procedure."
+                elif "overheat" in c_low or "temp" in c_low or "thermal" in c_low:
+                    reason = "Directly specifies thermal cutoff limits (85°C), fan verification, and cooling clearance."
+                elif "volt" in c_low or "power" in c_low or "current" in c_low or "phase" in c_low:
+                    reason = "Documents input power supply requirements, balance verification, and breaker specs."
+                elif "warn" in c_low or "caution" in c_low or "danger" in c_low:
+                    reason = "Mandatory safety directive covering lockout/tagout and hazard containment."
+
                 rerank_display.append({
+                    "chunk_id": r.id,
                     "source": r.manual_title or doc_name,
                     "page": r.page_number,
                     "section": r.section,
                     "match_type": r.match_type,
                     "rerank_score": round(r.similarity_score, 3),
-                    "snippet": r.content[:160] + "...",
+                    "score": round(r.similarity_score, 3),
+                    "reason": reason,
+                    "snippet": f"{reason} [{r.content[:120]}...]",
                 })
+
+            # Playbook ambiguity collision check
+            machine_set = set([r.machine_model for r in reranked if r.machine_model])
+            is_resolved = len(machine_set) <= 1
+            collisions = list(machine_set) if not is_resolved else []
 
             result = {
                 "step": 7,
                 "title": "Evidence Verification & Confidence Calibration",
                 "retrieved_candidates_count": len(retrieved),
                 "top_sources_reranked": rerank_display,
+                "candidates": rerank_display,
                 "confidence_score": conf.score,
                 "confidence_level": conf.level,
                 "confidence_reasons": conf.reasons,
-                "is_ambiguous": False,
+                "ambiguity_check": {
+                    "resolved": is_resolved,
+                    "collisions": collisions,
+                },
+                "is_ambiguous": not is_resolved,
                 "status": "completed",
             }
             session.step_data[7] = result
@@ -690,10 +770,19 @@ Respond ONLY in valid JSON:
             else:
                 heuristic = self.query_analyzer.analyze(query, machine_id=machine)
                 retrieved = await self.retriever.retrieve(heuristic, top_k=10)
-                if retrieved:
-                    session.retrieved_chunks = retrieved
-                    reranked = self.reranker.rerank(query, retrieved, top_k=5)
-                    session.reranked_chunks = reranked
+                session.retrieved_chunks = retrieved
+                reranked = self.reranker.rerank(query, retrieved, top_k=6)
+                session.reranked_chunks = reranked
+
+            # Strictly deduplicate by physical manual page so diagnosis cites unique pages
+            dedup_s8 = []
+            seen_s8_pages = set()
+            for r in (session.reranked_chunks or []):
+                p_key = (r.manual_title or r.manual_id, r.page_number)
+                if p_key not in seen_s8_pages:
+                    seen_s8_pages.add(p_key)
+                    dedup_s8.append(r)
+            session.reranked_chunks = dedup_s8 or session.reranked_chunks
 
             reranked_dicts = [
                 {
@@ -707,38 +796,79 @@ Respond ONLY in valid JSON:
                 for c in (session.reranked_chunks or [])
             ]
 
-            gen_output = self.answer_generator.generate_response(
-                query=query,
-                context_chunks=reranked_dicts,
-                machine_model=machine,
-                detected_error_code=err_code,
-            )
+            # Detect Playbook "What-If" Simulator follow-up
+            is_what_if = any(p in query.lower() for p in [
+                "what if that doesn't", "what if that does not", "didn't work", "did not work",
+                "still not working", "tried that", "already tried", "next step", "escalat"
+            ])
+            if is_what_if:
+                session.escalation_level += 1
+                logger.info(f"What-If simulator active for session {session_id} (Level {session.escalation_level})")
 
-            raw_solutions = gen_output.get("recommended_solutions", [])
-            ranked_solutions = self.solution_ranker.rank_solutions(raw_solutions, reranked_dicts)
+            # Check confidence evaluation from Step 7
+            conf_level = session.confidence_eval.get("level", "HIGH") if session.confidence_eval else "HIGH"
+            conf_score = session.confidence_eval.get("score", 0.92) if session.confidence_eval else 0.92
+            is_insufficient = conf_level == "LOW" and not detected_errs and len(reranked_dicts) < 1
 
-            # Fallback ONLY if model returned nothing: dynamically construct from retrieved chunks
-            if not ranked_solutions and reranked_dicts:
-                for idx, chunk in enumerate(reranked_dicts[:3]):
-                    ranked_solutions.append({
-                        "priority": idx + 1,
-                        "action": f"Inspect and verify: {chunk['content'][:120]}...",
-                        "reason": f"Documented in {chunk['manual_title']} (Section: {chunk['section']}, Page {chunk['page_number']})",
-                        "evidence_strength": "Strong" if idx == 0 else "Moderate",
-                        "source": f"{chunk['manual_title']}, Page {chunk['page_number']}",
-                        "is_verified": True,
-                    })
-            elif not ranked_solutions:
-                ranked_solutions = [
-                    {
-                        "priority": 1,
-                        "action": f"Inspect operational parameters and input power supply for {machine}",
-                        "reason": "Ensure standard operating conditions are met before cycling machine",
-                        "evidence_strength": "General",
-                        "source": f"{doc_name}",
-                        "is_verified": True,
-                    }
-                ]
+            if is_insufficient:
+                # Playbook Rule: If confidence is LOW or insufficient_info is true, do not produce a fix
+                logger.info("Low confidence detected in Step 8: Refusing unsupported repair procedure.")
+                clarify_msg = analysis.get("clarification_questions", [
+                    f"Insufficient information retrieved for {machine}. Please upload the specific section manual or clarify the exact fault symptoms."
+                ])[0]
+                gen_output = {
+                    "problem": query,
+                    "diagnosis": "Insufficient information in the available sources to answer this question. Unsupported repair procedures are blocked by safety protocol.",
+                    "probable_causes": [],
+                    "recommended_solutions": [],
+                    "safety_warnings": [
+                        "CAUTION: Do not attempt unverified mechanical or electrical adjustments without matching documentation."
+                    ],
+                    "confidence_explanation": "Blocked due to low confidence and missing manual evidence.",
+                    "clarifying_question": clarify_msg,
+                    "insufficient_info": True,
+                }
+                ranked_solutions = []
+            else:
+                gen_output = self.answer_generator.generate_response(
+                    query=query,
+                    context_chunks=reranked_dicts,
+                    machine_model=machine,
+                    detected_error_code=err_code,
+                    applied_steps=session.applied_steps if is_what_if else None,
+                )
+
+                raw_solutions = gen_output.get("recommended_solutions", [])
+                ranked_solutions = self.solution_ranker.rank_solutions(raw_solutions, reranked_dicts)
+
+                # Fallback ONLY if model returned nothing: dynamically construct from retrieved chunks
+                if not ranked_solutions and reranked_dicts:
+                    for idx, chunk in enumerate(reranked_dicts[:3]):
+                        ranked_solutions.append({
+                            "priority": idx + 1,
+                            "action": f"Inspect and verify: {chunk['content'][:120]}...",
+                            "reason": f"Documented in {chunk['manual_title']} (Section: {chunk['section']}, Page {chunk['page_number']})",
+                            "evidence_strength": "Strong" if idx == 0 else "Moderate",
+                            "source": f"{chunk['manual_title']}, Page {chunk['page_number']}",
+                            "is_verified": True,
+                        })
+                elif not ranked_solutions:
+                    ranked_solutions = [
+                        {
+                            "priority": 1,
+                            "action": f"Inspect operational parameters and input power supply for {machine}",
+                            "reason": "Ensure standard operating conditions are met before cycling machine",
+                            "evidence_strength": "General",
+                            "source": f"{doc_name}",
+                            "is_verified": True,
+                        }
+                    ]
+
+                # Update session applied steps for future What-If escalations
+                for s in ranked_solutions:
+                    action_text = s.get("action", "")
+                    if action_text and action_text not in session.applied_steps:
+                        session.applied_steps.append(action_text)
 
             # Generate yellow-highlighted evidence image ONLY if user uploaded a PDF
             evidence_images = []

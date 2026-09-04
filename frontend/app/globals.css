@@ -6,46 +6,61 @@
 
 @layer base {
   :root {
-    --color-bg: #ffffff;
-    --color-surface: #f8f9fa;
-    --color-surface-elevated: #ffffff;
-    --color-border: #e9ecef;
-    --color-border-subtle: #f1f3f5;
-    --color-text: #212529;
-    --color-text-secondary: #495057;
-    --color-text-muted: #868e96;
-    --color-primary: #3378ff;
-    --color-primary-hover: #1b57f5;
-    --color-success: #12b886;
-    --color-warning: #f59f00;
-    --color-error: #fa5252;
-    --color-info: #339af0;
+    --color-bg: #FAF6F0;
+    --color-surface: #F2ECE1;
+    --color-surface-elevated: #FFFFFF;
+    --color-border: #E3D7C8;
+    --color-border-subtle: #ECE2D5;
+    --color-text: #2C2219;
+    --color-text-secondary: #5E4E40;
+    --color-text-muted: #8E7D6E;
+    --color-primary: #785A3C;
+    --color-primary-hover: #5F442A;
+    --color-success: #2C7A53;
+    --color-warning: #B3681B;
+    --color-error: #B03A3A;
+    --color-info: #556D7F;
+
+    /* Sidebar Layout Tokens */
+    --sidebar-width-expanded: 260px;
+    --sidebar-width-collapsed: 72px;
+    --header-height: 56px;
   }
 
   .dark {
-    --color-bg: #0d1117;
-    --color-surface: #161b22;
-    --color-surface-elevated: #1c2128;
-    --color-border: #30363d;
-    --color-border-subtle: #21262d;
-    --color-text: #e6edf3;
-    --color-text-secondary: #b1bac4;
-    --color-text-muted: #7d8590;
-    --color-primary: #599dff;
-    --color-primary-hover: #3378ff;
-    --color-success: #3fb950;
-    --color-warning: #d29922;
-    --color-error: #f85149;
-    --color-info: #58a6ff;
+    --color-bg: #1A1613;
+    --color-surface: #231E19;
+    --color-surface-elevated: #2D2620;
+    --color-border: #3D332A;
+    --color-border-subtle: #332A22;
+    --color-text: #F2EDE5;
+    --color-text-secondary: #C7B9AC;
+    --color-text-muted: #8E7F72;
+    --color-primary: #B5906A;
+    --color-primary-hover: #9D7853;
+    --color-success: #4E9A75;
+    --color-warning: #D99B4E;
+    --color-error: #DE5B5B;
+    --color-info: #728A9E;
   }
 
+  html,
   body {
     @apply bg-[var(--color-bg)] text-[var(--color-text)] antialiased;
     font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    width: 100%;
+    min-height: 100%;
+    overflow-x: hidden;
   }
 
   * {
     @apply border-[var(--color-border)];
+    box-sizing: border-box;
+  }
+
+  img, svg, video {
+    max-width: 100%;
+    height: auto;
   }
 }
 

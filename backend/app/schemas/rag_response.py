@@ -47,6 +47,7 @@ class RAGResponse(BaseModel):
 
     # Traceable citations
     citations: list[Citation] = []
+    proof_links: list[dict[str, Any]] = []
     evidence_images: list[dict[str, Any]] = []
 
     # State flags for the frontend

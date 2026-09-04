@@ -29,7 +29,8 @@ export default function ReportDetailPage() {
   }, [reportId]);
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-6 space-y-4">
+    <div className="w-full flex-1 py-6 px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-[1600px] mx-auto space-y-4">
       {/* Header Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
         <div className="flex items-center gap-3">
@@ -101,7 +102,7 @@ export default function ReportDetailPage() {
           <p className="text-xs text-red-600 dark:text-red-300">{error}</p>
         </div>
       ) : (
-        <div className="rounded-xl border bg-white shadow-sm overflow-hidden min-h-[750px]">
+        <div className="rounded-xl border border-[var(--color-border)] bg-white shadow-sm overflow-hidden min-h-[600px] flex-1">
           <iframe
             src={`/api/reports/${reportId}/html`}
             title={`Report ${reportId}`}
@@ -109,6 +110,7 @@ export default function ReportDetailPage() {
           />
         </div>
       )}
+      </div>
     </div>
   );
 }

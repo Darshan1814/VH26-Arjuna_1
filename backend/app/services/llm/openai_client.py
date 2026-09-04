@@ -26,6 +26,8 @@ class OpenAIClient:
                 self._client = OpenAI(
                     base_url="https://api.groq.com/openai/v1",
                     api_key=settings.GROQ_API_KEY,
+                    max_retries=0,
+                    timeout=20.0,
                 )
                 self._is_azure = False
                 logger.info(f"Initialized ultra-fast Groq LLM client (model: {settings.GROQ_MODEL})")
@@ -62,23 +64,27 @@ class OpenAIClient:
         response_format: Optional[dict[str, str]] = None,
         temperature: float = 0.1,
         max_tokens: int = 2500,
+        model: Optional[str] = None,
     ) -> str:
         """Execute a chat completion with model fallback, optimized for Groq and OpenAI."""
         if settings.GROQ_API_KEY:
-            # Verified best Groq model supporting structured JSON outputs & sub-second latency
-            candidate_models = ["qwen/qwen3.8-27b"]
+            preferred = model or settings.GROQ_REASONING_MODEL or settings.GROQ_MODEL
+            candidate_models = []
+            for m in [preferred, "openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "qwen/qwen3.6-27b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
+                if m and m not in candidate_models:
+                    candidate_models.append(m)
         else:
-            candidate_models = ["gpt-5.5"]
+            candidate_models = [model] if model else ["gpt-5.5"]
             for fallback in [settings.MODEL_GEN, settings.AZURE_OPENAI_DEPLOYMENT, "gpt-5.4", "gpt-5-mini", "gpt-4o"]:
                 if fallback and fallback not in candidate_models:
                     candidate_models.append(fallback)
 
         last_err = None
-        for model in candidate_models:
-            is_reasoning_or_5 = any(prefix in model.lower() for prefix in ["gpt-5", "o1", "o3", "o4"])
+        for candidate_model in candidate_models:
+            is_reasoning_or_5 = any(prefix in candidate_model.lower() for prefix in ["gpt-5", "o1", "o3", "o4"])
 
             kwargs: dict[str, Any] = {
-                "model": model,
+                "model": candidate_model,
                 "messages": messages,
             }
             if response_format:
@@ -123,7 +129,7 @@ class OpenAIClient:
                             e = retry_err
 
                     last_err = e
-                    logger.warning(f"Chat completion with model '{model}' failed: {e}")
+                    logger.warning(f"Chat completion with model '{candidate_model}' failed: {e}")
                     break
 
         logger.error(f"All model candidates failed. Last error: {last_err}")
@@ -135,12 +141,14 @@ class OpenAIClient:
         self,
         messages: list[dict[str, Any]],
         temperature: float = 0.1,
+        model: Optional[str] = None,
     ) -> dict[str, Any]:
         """Execute chat completion and parse JSON with automatic cleanup."""
         raw_text = self.chat_completion(
             messages=messages,
             response_format={"type": "json_object"},
             temperature=temperature,
+            model=model,
         )
         cleaned = self._clean_json_text(raw_text)
         try:
@@ -155,22 +163,58 @@ class OpenAIClient:
         image_base64: str,
         mime_type: str = "image/png",
     ) -> str:
-        """Analyze an image using multimodal vision capability."""
-        messages = [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{mime_type};base64,{image_base64}"
+        """Analyze an image using vision or high-precision Tesseract OCR + Groq reasoning pipeline."""
+        vision_model = settings.GROQ_VISION_MODEL if settings.GROQ_API_KEY else "gpt-4o"
+        try:
+            messages = [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt},
+                        {
+                            "type": "image_url",
+                            "image_url": {
+                                "url": f"data:{mime_type};base64,{image_base64}"
+                            },
                         },
-                    },
-                ],
-            }
-        ]
-        return self.chat_completion(messages=messages, temperature=0.1)
+                    ],
+                }
+            ]
+            return self.chat_completion(messages=messages, temperature=0.1, model=vision_model)
+        except Exception as vision_err:
+            logger.info(f"Direct vision API call bypassed/failed ({vision_err}). Using high-precision Tesseract OCR + Groq reasoning.")
+
+        # OCR extraction fallback using Tesseract
+        import base64 as b64_mod
+        import io
+        from PIL import Image
+        import pytesseract
+
+        extracted_text = ""
+        try:
+            image_bytes = b64_mod.b64decode(image_base64)
+            img = Image.open(io.BytesIO(image_bytes))
+            # Convert to grayscale for improved OCR contrast
+            gray_img = img.convert("L")
+            extracted_text = pytesseract.image_to_string(gray_img)
+            if not extracted_text.strip():
+                extracted_text = pytesseract.image_to_string(img)
+        except Exception as ocr_err:
+            logger.warning(f"OCR fallback error: {ocr_err}")
+            extracted_text = "[No legible machine text detected by OCR]"
+
+        augmented_prompt = (
+            f"{prompt}\n\n"
+            f"--- OCR EXTRACTED TEXT & DATA FROM IMAGE ---\n"
+            f"{extracted_text.strip() or '[Visual panel inspection without embedded text]'}\n"
+            f"--------------------------------------------\n"
+            f"Provide a comprehensive technical industrial diagnostic response following the standard troubleshooting schema."
+        )
+        return self.chat_completion(
+            messages=[{"role": "user", "content": augmented_prompt}],
+            temperature=0.1,
+            model=settings.GROQ_MODEL,
+        )
 
     def create_embedding(self, text: str) -> list[float]:
         """Generate vector embedding for text using configured embedding model."""

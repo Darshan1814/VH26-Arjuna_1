@@ -64,10 +64,28 @@ async def upload_knowledge(
                 except Exception as c_err:
                     logger.warning(f"Could not write chunk cache: {c_err}")
 
-                # 5. Insert into Supabase if configured
+                # 5. Insert into SQLite & Supabase
+                clean_model = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
+                effective_model = machine_model or norm_doc.machine_model or clean_model or "Industrial Equipment"
                 try:
-                    clean_model = filename.rsplit(".", 1)[0].replace("_", " ").replace("-", " ").title()
-                    effective_model = machine_model or norm_doc.machine_model or clean_model or "Industrial Equipment"
+                    from app.core.sqlite_storage import get_sqlite_storage
+                    sql_chunks = []
+                    for c in chunks:
+                        c_mach = c.get("machine_model") or effective_model
+                        sql_chunks.append({
+                            **c,
+                            "filename": filename,
+                            "file_name": filename,
+                            "machine_model": c_mach,
+                            "machine": c_mach,
+                            "manual_id": filename,
+                        })
+                    get_sqlite_storage().save_chunks(sql_chunks)
+                    logger.info(f"Saved {len(sql_chunks)} chunks to SQLite for {filename}")
+                except Exception as sql_e:
+                    logger.warning(f"Could not write chunks to SQLite: {sql_e}")
+
+                try:
                     mach_res = client.table("machines").select("id").eq("model_number", effective_model).execute()
                     if mach_res.data:
                         machine_id = mach_res.data[0]["id"]

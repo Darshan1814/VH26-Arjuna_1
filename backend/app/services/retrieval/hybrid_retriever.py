@@ -140,10 +140,18 @@ class HybridRetriever:
                     except Exception:
                         meta_dict = {}
 
+                content_str = sc.get("content", "")
+                is_exact_err = any(
+                    e.lower() in analysis.original_query.lower() or (analysis.error_codes and e.upper() in [ec.upper() for ec in analysis.error_codes])
+                    for e in err_list
+                )
+                m_type = "exact_error" if is_exact_err else sc.get("match_type", "vector")
+                sim_score = 0.99 if is_exact_err else sc.get("similarity_score", 0.85)
+
                 results.append(
                     RetrievedChunk(
                         id=sc.get("id") or str(uuid.uuid4())[:8],
-                        content=sc.get("content", ""),
+                        content=content_str,
                         page_number=sc.get("page_number", 1),
                         section=sc.get("section", "General"),
                         chunk_index=sc.get("chunk_index", 0),
@@ -152,8 +160,8 @@ class HybridRetriever:
                         machine_id=machine_val,
                         manual_title=sc.get("filename", "Technical Service Manual"),
                         machine_model=machine_val,
-                        similarity_score=sc.get("similarity_score", 0.85),
-                        match_type=sc.get("match_type", "vector"),
+                        similarity_score=sim_score,
+                        match_type=m_type,
                         metadata=meta_dict,
                     )
                 )
@@ -162,42 +170,54 @@ class HybridRetriever:
 
         # 2. Check disk chunks JSON
         if os.path.exists(settings.MANUALS_DIR):
-            query_lower = analysis.semantic_query.lower()
+            query_lower = analysis.original_query.lower()
             terms = [t for t in query_lower.split() if len(t) > 2]
-        for fname in os.listdir(settings.MANUALS_DIR):
-            if fname.endswith(".chunks.json"):
-                try:
-                    with open(os.path.join(settings.MANUALS_DIR, fname), "r", encoding="utf-8") as f:
-                        cached_chunks = json.load(f)
-                    for c in cached_chunks:
-                        chunk_machine = (c.get("machine_model") or "").strip()
-                        if analysis.machine_id and chunk_machine:
-                            # Strict match: do not leak unrelated equipment manuals
-                            if analysis.machine_id.lower() not in chunk_machine.lower() and chunk_machine.lower() not in analysis.machine_id.lower():
-                                continue
+            for fname in os.listdir(settings.MANUALS_DIR):
+                if fname.endswith(".chunks.json"):
+                    try:
+                        with open(os.path.join(settings.MANUALS_DIR, fname), "r", encoding="utf-8") as f:
+                            cached_chunks = json.load(f)
+                        for c in cached_chunks:
+                            chunk_machine = (c.get("machine_model") or "").strip()
+                            content_lower = c.get("content", "").lower()
+                            meta_machines = [str(m).lower() for m in c.get("metadata", {}).get("machine_models", [])]
 
-                        content_lower = c.get("content", "").lower()
-                        score = sum(1 for t in terms if t in content_lower) / max(len(terms), 1)
-                        if score > 0.1 or any(e.lower() in query_lower for e in c.get("error_codes", [])):
-                            results.append(
-                                RetrievedChunk(
-                                    id=str(uuid.uuid4())[:8],
-                                    content=c.get("content", ""),
-                                    page_number=c.get("page_number", 1),
-                                    section=c.get("section", "General"),
-                                    chunk_index=c.get("chunk_index", 0),
-                                    error_codes=c.get("error_codes", []),
-                                    manual_id=c.get("file_name") or fname.replace(".chunks.json", ""),
-                                    machine_id=chunk_machine or analysis.machine_id or "Universal Machine",
-                                    manual_title=c.get("file_name") or fname.replace(".chunks.json", ""),
-                                    machine_model=chunk_machine or analysis.machine_id or "Universal Machine",
-                                    similarity_score=min(0.7 + score * 0.25, 0.96),
-                                    match_type="keyword",
-                                    metadata=c.get("metadata", {}),
+                            if analysis.machine_id:
+                                mach_req = analysis.machine_id.lower()
+                                is_mach_match = (
+                                    not chunk_machine
+                                    or mach_req in chunk_machine.lower()
+                                    or chunk_machine.lower() in mach_req
+                                    or mach_req in content_lower
+                                    or any(mach_req in m or m in mach_req for m in meta_machines)
                                 )
-                            )
-                except Exception as err:
-                    logger.warning(f"Error reading local chunk file {fname}: {err}")
+                                if not is_mach_match:
+                                    continue
+
+                            score = sum(1 for t in terms if t in content_lower) / max(len(terms), 1)
+                            is_error_match = any(e.lower() in query_lower for e in c.get("error_codes", []))
+                            if score > 0.05 or is_error_match or (analysis.machine_id and analysis.machine_id.lower() in content_lower):
+                                m_type = "exact_error" if is_error_match else "keyword"
+                                sim_score = 0.98 if is_error_match else min(0.75 + score * 0.25, 0.96)
+                                results.append(
+                                    RetrievedChunk(
+                                        id=str(uuid.uuid4())[:8],
+                                        content=c.get("content", ""),
+                                        page_number=c.get("page_number", 1),
+                                        section=c.get("section", "General"),
+                                        chunk_index=c.get("chunk_index", 0),
+                                        error_codes=c.get("error_codes", []),
+                                        manual_id=c.get("file_name") or fname.replace(".chunks.json", ""),
+                                        machine_id=chunk_machine or analysis.machine_id or "Universal Machine",
+                                        manual_title=c.get("file_name") or fname.replace(".chunks.json", ""),
+                                        machine_model=chunk_machine or analysis.machine_id or "Universal Machine",
+                                        similarity_score=sim_score,
+                                        match_type=m_type,
+                                        metadata=c.get("metadata", {}),
+                                    )
+                                )
+                    except Exception as err:
+                        logger.warning(f"Error reading local chunk file {fname}: {err}")
 
         return results
 
@@ -344,9 +364,24 @@ class HybridRetriever:
             return []
 
     def _deduplicate(self, chunks: list[RetrievedChunk]) -> list[RetrievedChunk]:
-        """Remove duplicate chunks, keeping the highest-scoring version."""
-        seen: dict[str, RetrievedChunk] = {}
+        """Remove duplicate chunks, keeping the highest-scoring version.
+        Deduplicates by chunk.id, content hash, and (manual_id, page_number, section)."""
+        import hashlib
+        seen_keys: dict[str, RetrievedChunk] = {}
+
         for chunk in chunks:
-            if chunk.id not in seen or chunk.similarity_score > seen[chunk.id].similarity_score:
-                seen[chunk.id] = chunk
-        return list(seen.values())
+            norm_content = " ".join(chunk.content.strip().split()[:25]).lower()
+            content_sig = hashlib.md5(norm_content.encode("utf-8", errors="ignore")).hexdigest()
+            # Deduplicate by physical manual page, section, and text signature
+            pos_key = f"{chunk.manual_id}_p{chunk.page_number}_{chunk.section}_{content_sig}"
+
+            if pos_key in seen_keys:
+                if chunk.similarity_score > seen_keys[pos_key].similarity_score:
+                    seen_keys[pos_key] = chunk
+            elif chunk.id and chunk.id in seen_keys:
+                if chunk.similarity_score > seen_keys[chunk.id].similarity_score:
+                    seen_keys[chunk.id] = chunk
+            else:
+                seen_keys[pos_key] = chunk
+
+        return list(seen_keys.values())
