@@ -246,7 +246,7 @@ pipeline {
         // ====================================================================
         stage('Deploy to Kubernetes via Helm') {
             steps {
-                echo "====> Deploying Machine Troubleshooting System to Minikube/K8s..."
+                echo "=====> Deploying Machine Troubleshooting System to Minikube/K8s..."
                 script {
                     sh """
                         # ---- Locate kubeconfig ----
@@ -258,23 +258,53 @@ pipeline {
                             export KUBECONFIG="/home/ec2-user/.kube/config"
                         fi
 
-                        # ---- Minikube addons (best-effort) ----
-                        minikube addons enable metrics-server 2>/dev/null || true
-                        minikube addons enable ingress        2>/dev/null || true
+                        # ============================================================
+                        # DISK & VOLUME DIAGNOSTICS — always shown so you can see
+                        # exactly how much space is available before deploying
+                        # ============================================================
+                        echo "=========================================="
+                        echo "  EC2 HOST DISK SPACE"
+                        echo "=========================================="
+                        df -hT                          # all filesystems + types
+                        echo ""
+                        echo "--- Largest directories (top 10) ---"
+                        du -sh /* 2>/dev/null | sort -rh | head -10 || true
+                        echo ""
+                        echo "--- Docker disk usage ---"
+                        docker system df 2>/dev/null || true
+                        echo ""
+                        echo "--- Minikube VM disk (inside the node) ---"
+                        minikube ssh "df -h" 2>/dev/null || true
+                        echo ""
+                        echo "--- Kubernetes Node Capacity & Allocatable ---"
+                        kubectl describe nodes 2>/dev/null | grep -A8 "Capacity:" || true
+                        kubectl describe nodes 2>/dev/null | grep -A8 "Allocatable:" || true
+                        kubectl describe nodes 2>/dev/null | grep -A8 "Allocated resources:" || true
+                        echo "=========================================="
 
-                        echo "--- Cluster Info ---"
-                        kubectl cluster-info || { echo "FATAL: Cannot reach cluster!"; exit 1; }
+                        # ---- Quick cluster connectivity check ----
+                        kubectl cluster-info || { echo "FATAL: Cannot reach k8s cluster!"; exit 1; }
                         kubectl get nodes -o wide
 
-                        echo "--- Available Resources ---"
-                        kubectl top nodes 2>/dev/null || true
-                        kubectl describe nodes | grep -A5 "Allocated resources" || true
+                        # ---- Minikube addons (best-effort) ----
+                        minikube addons enable ingress 2>/dev/null || true
 
                         # ---- Ensure namespace exists ----
                         kubectl create namespace ${K8S_NAMESPACE} 2>/dev/null || true
 
-                        # ---- Helm upgrade/install (NO --wait to avoid timeout) ----
-                        echo "Running Helm upgrade/install..."
+                        # ---- Clean dangling docker images to free disk ----
+                        echo "Freeing disk: pruning unused Docker images/build cache..."
+                        docker image prune -f 2>/dev/null || true
+                        docker builder prune -f 2>/dev/null || true
+
+                        # ============================================================
+                        # HELM DEPLOY — ultra-minimal resource profile
+                        #   persistence.enabled=false  → uses emptyDir (zero disk needed)
+                        #   monitoring.enabled=false   → no Prometheus/Grafana
+                        #   hpa.enabled=false          → no metrics-server needed
+                        #   CPU/memory requests kept tiny so it fits any node
+                        # ============================================================
+                        echo "Running Helm upgrade/install (minimal mode)..."
                         helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \\
                             --namespace ${K8S_NAMESPACE} \\
                             --set backend.image.repository=${BACKEND_IMAGE} \\
@@ -284,7 +314,15 @@ pipeline {
                             --set backend.hpa.enabled=false \\
                             --set frontend.hpa.enabled=false \\
                             --set monitoring.enabled=false \\
-                            --set persistence.storageClass=standard \\
+                            --set persistence.enabled=false \\
+                            --set backend.resources.requests.cpu=50m \\
+                            --set backend.resources.requests.memory=256Mi \\
+                            --set backend.resources.limits.cpu=1000m \\
+                            --set backend.resources.limits.memory=2048Mi \\
+                            --set frontend.resources.requests.cpu=20m \\
+                            --set frontend.resources.requests.memory=64Mi \\
+                            --set frontend.resources.limits.cpu=300m \\
+                            --set frontend.resources.limits.memory=256Mi \\
                             --set secrets.groqApiKey="${GROQ_API_KEY}" \\
                             --set secrets.groqModel="${GROQ_MODEL}" \\
                             --set secrets.groqFastModel="${GROQ_FAST_MODEL}" \\
@@ -299,42 +337,35 @@ pipeline {
                             --set secrets.supabaseKey="${SUPABASE_KEY}" \\
                             --set secrets.supabaseServiceRoleKey="${SUPABASE_SERVICE_ROLE_KEY}" \\
                             --timeout 5m \\
-                            --atomic=false \\
-                            --debug 2>&1 | tail -30
+                            --atomic=false
 
-                        echo "Helm upgrade submitted. Checking what was applied..."
-                        helm status ${HELM_RELEASE} --namespace ${K8S_NAMESPACE}
+                        echo "Helm applied. Release status:"
+                        helm status ${HELM_RELEASE} --namespace ${K8S_NAMESPACE} || true
 
-                        echo "--- Pods immediately after deploy ---"
+                        echo "--- Pods after deploy ---"
                         kubectl get pods -n ${K8S_NAMESPACE} -o wide
 
-                        echo "--- PVC Status (must be Bound) ---"
-                        kubectl get pvc -n ${K8S_NAMESPACE}
-
-                        # ---- Wait for frontend (fast — pre-built Next.js) ----
+                        # ---- Frontend rollout (fast, pre-built image) ----
                         echo "Waiting for frontend rollout (max 3 min)..."
                         kubectl rollout status deployment/${HELM_RELEASE}-frontend \\
                             --namespace ${K8S_NAMESPACE} --timeout=180s || true
 
-                        # ---- Backend: just watch, don't fail pipeline ----
-                        echo "Backend is downloading ML models — this takes 5-10 min on first boot."
-                        echo "Watching backend for up to 8 min (non-blocking)..."
+                        # ---- Backend: non-blocking watch (downloads ML on first run) ----
+                        echo "Watching backend rollout (up to 10 min, non-blocking)..."
                         kubectl rollout status deployment/${HELM_RELEASE}-backend \\
-                            --namespace ${K8S_NAMESPACE} --timeout=480s || {
-                                echo "Backend rollout not yet complete (normal on first boot)."
-                                echo "--- Backend Pod Events ---"
-                                kubectl get events -n ${K8S_NAMESPACE} \\
-                                    --field-selector reason!=Scheduled \\
-                                    --sort-by='.lastTimestamp' 2>/dev/null | tail -20 || true
-                                echo "--- Backend Pod Logs (last 30 lines) ---"
+                            --namespace ${K8S_NAMESPACE} --timeout=600s || {
+                                echo "Backend not yet Ready (may still be loading models)."
+                                echo "--- Backend logs (last 40 lines) ---"
                                 kubectl logs -l app.kubernetes.io/component=backend \\
-                                    -n ${K8S_NAMESPACE} --tail=30 2>/dev/null || true
+                                    -n ${K8S_NAMESPACE} --tail=40 2>/dev/null || true
+                                echo "--- Backend events ---"
+                                kubectl get events -n ${K8S_NAMESPACE} \\
+                                    --sort-by='.lastTimestamp' 2>/dev/null | tail -20 || true
                             }
 
                         echo "--- Final Pod Status ---"
                         kubectl get pods -n ${K8S_NAMESPACE} -o wide
-                        echo "--- Services ---"
-                        kubectl get svc -n ${K8S_NAMESPACE}
+                        kubectl get svc  -n ${K8S_NAMESPACE}
                     """
                 }
             }
