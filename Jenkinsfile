@@ -224,75 +224,10 @@ pipeline {
         stage('Deploy to Production (Docker)') {
             steps {
                 echo "===> Deploying directly to production using Docker..."
-                script {
-                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                        sh """
-                            set +e
-                            set -x
-                            export PATH="\$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/snap/bin:\$HOME/bin:\$HOME/.local/bin"
-
-                            # --- Write production environment file to /tmp ---
-                            rm -f /tmp/arjuna.env 2>/dev/null || true
-                            echo "Writing production environment file to /tmp/arjuna.env..."
-                            echo "GROQ_API_KEY=${GROQ_API_KEY}" > /tmp/arjuna.env
-                            echo "GROQ_MODEL=${GROQ_MODEL}" >> /tmp/arjuna.env
-                            echo "GROQ_FAST_MODEL=${GROQ_FAST_MODEL}" >> /tmp/arjuna.env
-                            echo "GROQ_REASONING_MODEL=${GROQ_REASONING_MODEL}" >> /tmp/arjuna.env
-                            echo "GROQ_VISION_MODEL=${GROQ_VISION_MODEL}" >> /tmp/arjuna.env
-                            echo "ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}" >> /tmp/arjuna.env
-                            echo "ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}" >> /tmp/arjuna.env
-                            echo "ELEVENLABS_FALLBACK_VOICE_ID=${ELEVENLABS_FALLBACK_VOICE_ID}" >> /tmp/arjuna.env
-                            echo "ELEVENLABS_MODEL_ID=${ELEVENLABS_MODEL_ID}" >> /tmp/arjuna.env
-                            echo "SERPER_API_KEY=${SERPER_API_KEY}" >> /tmp/arjuna.env
-                            echo "SUPABASE_URL=${SUPABASE_URL}" >> /tmp/arjuna.env
-                            echo "SUPABASE_KEY=${SUPABASE_KEY}" >> /tmp/arjuna.env
-                            echo "SUPABASE_ANON_KEY=${SUPABASE_KEY}" >> /tmp/arjuna.env
-                            echo "SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}" >> /tmp/arjuna.env
-                            echo "SUPABASE_STORAGE_BUCKET=manuals" >> /tmp/arjuna.env
-                            echo "EMBEDDING_MODEL=BAAI/bge-m3" >> /tmp/arjuna.env
-                            echo "EMBEDDING_DIMENSION=1024" >> /tmp/arjuna.env
-                            echo "RERANKER_MODEL=BAAI/bge-reranker-v2-m3" >> /tmp/arjuna.env
-                            echo "HF_HOME=/app/model_cache" >> /tmp/arjuna.env
-                            echo "MANUALS_DIR=/app/manuals" >> /tmp/arjuna.env
-                            echo "SQLITE_DB_PATH=/app/database/troubleshooter.db" >> /tmp/arjuna.env
-                            echo "BACKEND_HOST=0.0.0.0" >> /tmp/arjuna.env
-                            echo "BACKEND_PORT=8000" >> /tmp/arjuna.env
-                            echo "LOG_LEVEL=info" >> /tmp/arjuna.env
-                            echo "BACKEND_URL=http://localhost:8000" >> /tmp/arjuna.env
-
-                            # --- Clean up previous containers ---
-                            echo "Stopping previous production containers..."
-                            docker stop mt-backend mt-frontend 2>/dev/null || true
-                            docker rm -f mt-backend mt-frontend 2>/dev/null || true
-
-                            # --- Ensure Docker volumes exist ---
-                            docker volume create mt-manuals 2>/dev/null || true
-                            docker volume create mt-database 2>/dev/null || true
-                            docker volume create mt-model-cache 2>/dev/null || true
-
-                            # --- Launch Backend & Frontend Containers ---
-                            echo "Launching backend and frontend containers..."
-                            docker run -d --name mt-backend --network host --restart unless-stopped --env-file /tmp/arjuna.env -v mt-manuals:/app/manuals -v mt-database:/app/database -v mt-model-cache:/app/model_cache ${BACKEND_IMAGE}:latest || docker run -d --name mt-backend -p 8000:8000 --restart unless-stopped --env-file /tmp/arjuna.env -v mt-manuals:/app/manuals -v mt-database:/app/database -v mt-model-cache:/app/model_cache ${BACKEND_IMAGE}:latest
-
-                            docker run -d --name mt-frontend --network host --restart unless-stopped -e BACKEND_URL=http://localhost:8000 ${FRONTEND_IMAGE}:latest || docker run -d --name mt-frontend -p 3000:3000 --restart unless-stopped -e BACKEND_URL=http://localhost:8000 ${FRONTEND_IMAGE}:latest
-
-                            # --- Wait for container boot ---
-                            echo "Waiting 15s for containers to initialize..."
-                            sleep 15
-
-                            # --- Verification and Health Check ---
-                            echo "=== Active Production Containers ==="
-                            docker ps | grep mt- || true
-
-                            echo "=== Health Checks ==="
-                            curl -sf http://localhost:8000/health && echo "BACKEND: HEALTHY (:8000)" || true
-                            curl -sf -o /dev/null http://localhost:3000 && echo "FRONTEND: HEALTHY (:3000)" || true
-
-                            echo "=== Deployment Complete: Images are LIVE on host! ==="
-                            exit 0
-                        """
-                    }
-                }
+                sh '''
+                    chmod +x ./deploy.sh
+                    ./deploy.sh
+                '''
             }
         }
 
