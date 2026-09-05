@@ -56,7 +56,7 @@ echo "Stopping old containers..."
 docker stop mt-backend mt-frontend 2>/dev/null || true
 docker rm -f mt-backend mt-frontend 2>/dev/null || true
 
-# Stop old minikube/helm services on port 80 if running
+# Stop old minikube/helm services if running
 if command -v helm >/dev/null 2>&1; then
     helm uninstall mt-system -n mt-system 2>/dev/null || true
     helm uninstall mt-system 2>/dev/null || true
@@ -64,9 +64,8 @@ fi
 if command -v minikube >/dev/null 2>&1; then
     minikube stop 2>/dev/null || true
 fi
-fuser -k 80/tcp 2>/dev/null || true
 
-# Update host Nginx if installed so port 80 routes to port 3000
+# Configure host Nginx so port 80 (machfixai.in) cleanly proxies to port 3000
 if command -v nginx >/dev/null 2>&1 && [ -d /etc/nginx ]; then
     echo "Updating host Nginx configuration for machfixai.in..."
     cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default >/dev/null 2>&1 || true
@@ -90,7 +89,8 @@ server {
     }
 }
 NGINX_EOF
-    sudo systemctl reload nginx 2>/dev/null || sudo service nginx reload 2>/dev/null || true
+    sudo ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default 2>/dev/null || true
+    sudo nginx -t >/dev/null 2>&1 && (sudo systemctl restart nginx 2>/dev/null || sudo service nginx restart 2>/dev/null || true)
 fi
 
 # 3. Ensure Docker network and volumes exist for state persistence
@@ -115,17 +115,9 @@ docker run -d \
     -v mt-model-cache:/app/model_cache \
     "${BACKEND_IMG}:${TAG}"
 
-# 5. Launch Frontend container (bind both 80 and 3000)
-echo "Launching mt-frontend container..."
+# 5. Launch Frontend container on port 3000
+echo "Launching mt-frontend container on port 3000..."
 docker rm -f mt-frontend 2>/dev/null || true
-docker run -d \
-    --name mt-frontend \
-    --network mt-network \
-    --restart unless-stopped \
-    -p 80:3000 \
-    -p 3000:3000 \
-    -e BACKEND_URL="http://mt-backend:8000" \
-    "${FRONTEND_IMG}:${TAG}" 2>/dev/null || \
 docker run -d \
     --name mt-frontend \
     --network mt-network \
