@@ -56,6 +56,43 @@ echo "Stopping old containers..."
 docker stop mt-backend mt-frontend 2>/dev/null || true
 docker rm -f mt-backend mt-frontend 2>/dev/null || true
 
+# Stop old minikube/helm services on port 80 if running
+if command -v helm >/dev/null 2>&1; then
+    helm uninstall mt-system -n mt-system 2>/dev/null || true
+    helm uninstall mt-system 2>/dev/null || true
+fi
+if command -v minikube >/dev/null 2>&1; then
+    minikube stop 2>/dev/null || true
+fi
+fuser -k 80/tcp 2>/dev/null || true
+
+# Update host Nginx if installed so port 80 routes to port 3000
+if command -v nginx >/dev/null 2>&1 && [ -d /etc/nginx ]; then
+    echo "Updating host Nginx configuration for machfixai.in..."
+    cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default >/dev/null 2>&1 || true
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name machfixai.in www.machfixai.in _;
+
+    client_max_body_size 50M;
+
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_cache_bypass $http_upgrade;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+    }
+}
+NGINX_EOF
+    sudo systemctl reload nginx 2>/dev/null || sudo service nginx reload 2>/dev/null || true
+fi
+
 # 3. Ensure Docker network and volumes exist for state persistence
 echo "Ensuring Docker network and storage volumes exist..."
 docker network inspect mt-network >/dev/null 2>&1 || docker network create mt-network
@@ -78,9 +115,17 @@ docker run -d \
     -v mt-model-cache:/app/model_cache \
     "${BACKEND_IMG}:${TAG}"
 
-# 5. Launch Frontend container
+# 5. Launch Frontend container (bind both 80 and 3000)
 echo "Launching mt-frontend container..."
 docker rm -f mt-frontend 2>/dev/null || true
+docker run -d \
+    --name mt-frontend \
+    --network mt-network \
+    --restart unless-stopped \
+    -p 80:3000 \
+    -p 3000:3000 \
+    -e BACKEND_URL="http://mt-backend:8000" \
+    "${FRONTEND_IMG}:${TAG}" 2>/dev/null || \
 docker run -d \
     --name mt-frontend \
     --network mt-network \
