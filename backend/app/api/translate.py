@@ -3,7 +3,7 @@
 import json
 import logging
 import os
-from typing import Any, Dict, List, Union
+from typing import Any, Dict, List, Optional, Union
 import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
