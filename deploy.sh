@@ -102,14 +102,20 @@ NGINX_EOF
 fi
 
 # Method B: Root write via Docker volume mount (guaranteed root access without sudo password)
-if [ -d /etc/nginx ]; then
-    docker run --rm -v /etc/nginx:/etc/nginx alpine sh -c '
-        mkdir -p /etc/nginx/conf.d /etc/nginx/sites-available /etc/nginx/sites-enabled
-        cat << "EOF" > /etc/nginx/conf.d/machfixai.conf
+echo "Configuring Nginx via Docker volume mount..."
+docker run --rm -v /etc/nginx:/etc/nginx alpine sh -c '
+    mkdir -p /etc/nginx/conf.d /etc/nginx/conf.d.bak /etc/nginx/sites-available /etc/nginx/sites-enabled
+    # Move conflicting configs out of conf.d so only machfixai.conf handles port 80
+    for f in /etc/nginx/conf.d/*.conf; do
+        [ -f "$f" ] && [ "$(basename "$f")" != "machfixai.conf" ] && mv "$f" /etc/nginx/conf.d.bak/ 2>/dev/null || true
+    done
+    cat << "EOF" > /etc/nginx/conf.d/machfixai.conf
 server {
-    listen 80 default_server;
+    listen 80;
     server_name machfixai.in www.machfixai.in _;
+
     client_max_body_size 50M;
+
     location / {
         proxy_pass http://127.0.0.1:3000;
         proxy_http_version 1.1;
@@ -123,14 +129,25 @@ server {
     }
 }
 EOF
-        rm -f /etc/nginx/conf.d/default.conf
-        cp -f /etc/nginx/conf.d/machfixai.conf /etc/nginx/sites-available/default
-        ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default
-    ' 2>/dev/null || true
+    cp -f /etc/nginx/conf.d/machfixai.conf /etc/nginx/sites-available/default 2>/dev/null || true
+    ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default 2>/dev/null || true
+    rm -f /etc/nginx/sites-enabled/000-default /etc/nginx/conf.d/default.conf 2>/dev/null || true
+    echo "Nginx config files in conf.d:"
+    ls -la /etc/nginx/conf.d/
+' 2>/dev/null || true
 
-    # Force Nginx reload on host via SIGHUP
-    docker run --rm --privileged --pid=host alpine pkill -HUP nginx 2>/dev/null || true
-fi
+# Force Nginx reload on host via SIGHUP
+echo "Sending SIGHUP to host Nginx process..."
+docker run --rm --privileged --pid=host alpine sh -c '
+    PIDS=$(pidof nginx || true)
+    if [ -n "$PIDS" ]; then
+        echo "Found Nginx PIDs: $PIDS. Reloading..."
+        kill -HUP $PIDS 2>/dev/null || true
+    else
+        echo "No PID from pidof nginx. Trying killall / pkill..."
+        killall -HUP nginx 2>/dev/null || pkill -HUP nginx 2>/dev/null || true
+    fi
+' 2>/dev/null || true
 
 # 3. Ensure Docker network and volumes exist for state persistence
 echo "Ensuring Docker network and storage volumes exist..."
