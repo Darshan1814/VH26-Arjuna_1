@@ -118,7 +118,7 @@ export function Sidebar() {
             href="/"
             onClick={closeMobile}
             className="flex items-center gap-2.5 font-bold text-[var(--color-text)] group overflow-hidden"
-            title={t("Machine Troubleshooter")}
+            title="MachFixAI"
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--color-primary)] text-white shadow-xs group-hover:scale-105 transition-transform flex-shrink-0">
               <Wrench className="h-4 w-4" />
@@ -127,11 +127,11 @@ export function Sidebar() {
             {/* Title visible only when expanded or on mobile drawer */}
             {(!isCollapsed || isMobileOpen) && (
               <div className="flex flex-col min-w-0 transition-opacity duration-150">
-                <span className="text-xs font-bold tracking-tight text-[var(--color-text)] truncate">
-                  {t("Troubleshooter")}
+                <span className="text-sm font-bold tracking-tight text-[var(--color-text)] truncate">
+                  MachFix<span className="text-[var(--color-primary)]">AI</span>
                 </span>
                 <span className="text-[9px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider truncate">
-                  {t("Industrial AI")}
+                  {t("Industrial Diagnostic AI")}
                 </span>
               </div>
             )}

@@ -34,8 +34,8 @@ export function Navbar() {
         {/* Logo / App Name */}
         <Link href="/" className="flex items-center gap-2 font-semibold text-[var(--color-text)]">
           <Wrench className="h-5 w-5 text-[var(--color-primary)]" />
-          <span className="hidden sm:inline">{t("Machine Troubleshooter")}</span>
-          <span className="sm:hidden">MT</span>
+          <span className="hidden sm:inline">MachFixAI</span>
+          <span className="sm:hidden">MFAI</span>
         </Link>
 
         {/* Navigation & Controls */}

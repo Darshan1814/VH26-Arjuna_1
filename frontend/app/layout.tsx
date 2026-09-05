@@ -6,9 +6,9 @@ import { SidebarProvider } from "@/context/sidebar-context";
 import { AppShell } from "@/components/layout/app-shell";
 
 export const metadata: Metadata = {
-  title: "Machine Troubleshooter",
+  title: "MachFixAI - Industrial Diagnostic Platform",
   description:
-    "AI-powered machine troubleshooting with RAG-based source citations from service manuals",
+    "AI-powered machine troubleshooting and diagnostic platform with RAG-based source citations from service manuals",
 };
 
 export default function RootLayout({

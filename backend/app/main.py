@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan: startup and shutdown events."""
     setup_logging()
-    logger.info("Starting Machine Troubleshooter API")
+    logger.info("Starting MachFixAI API")
     logger.info(f"Embedding model: {settings.EMBEDDING_MODEL}")
     logger.info(f"Reranker model: {settings.RERANKER_MODEL}")
     gen_model = settings.GROQ_MODEL if settings.GROQ_API_KEY else (settings.AZURE_OPENAI_DEPLOYMENT or settings.MODEL_GEN)
@@ -33,12 +33,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # Models are loaded lazily on first use to keep startup fast
     yield
 
-    logger.info("Shutting down Machine Troubleshooter API")
+    logger.info("Shutting down MachFixAI API")
 
 
 app = FastAPI(
-    title="Machine Troubleshooter API",
-    description="RAG-based machine troubleshooting with source citations & Prometheus metrics",
+    title="MachFixAI API",
+    description="MachFixAI - Industrial Machine Diagnostics & Troubleshooting Engine with RAG citations",
     version="0.1.0",
     lifespan=lifespan,
 )

@@ -50,7 +50,7 @@ export function AppHeader() {
         if (path.startsWith("/reports/")) {
           return t("Diagnostic Report Preview");
         }
-        return t("Machine Troubleshooter");
+        return "MachFixAI";
     }
   };
 
@@ -100,7 +100,7 @@ export function AppHeader() {
               {pageTitle}
             </h1>
             <span className="hidden sm:inline text-[10px] text-[var(--color-text-muted)] font-medium truncate">
-              {t("Industrial AI Diagnostic Platform")}
+              {t("MachFixAI Industrial Diagnostic Platform")}
             </span>
           </div>
         </div>
