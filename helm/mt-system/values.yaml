@@ -2,7 +2,6 @@
 # Machine Troubleshooter Helm Values
 # =============================================================================
 
-# -- Global Settings --
 nameOverride: ""
 fullnameOverride: "mt"
 
@@ -17,37 +16,38 @@ backend:
   image:
     repository: darshan11111/mt-backend
     tag: "latest"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: NodePort
     port: 8000
     nodePort: 30080
   resources:
     requests:
-      cpu: 200m
-      memory: 512Mi
+      cpu: 100m
+      memory: 256Mi
     limits:
-      cpu: 1000m
-      memory: 2048Mi
+      cpu: 1500m
+      memory: 3072Mi
   hpa:
-    enabled: true
+    enabled: false          # Disabled: HPA needs metrics-server; enable after cluster is stable
     minReplicas: 1
-    maxReplicas: 4
-    targetCPUUtilizationPercentage: 75
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
     targetMemoryUtilizationPercentage: 85
+  # Long startup probes - backend downloads ML models on first boot (~3-5 min)
   probes:
     liveness:
       path: /health
-      initialDelaySeconds: 120
+      initialDelaySeconds: 300   # 5 min - wait for model download
       periodSeconds: 30
       timeoutSeconds: 15
-      failureThreshold: 5
+      failureThreshold: 6        # 6 * 30s = 3 min grace after first check
     readiness:
       path: /health
-      initialDelaySeconds: 60
-      periodSeconds: 10
+      initialDelaySeconds: 120   # 2 min initial wait
+      periodSeconds: 15
       timeoutSeconds: 10
-      failureThreshold: 5
+      failureThreshold: 10       # 10 * 15s = 2.5 min grace
   env:
     BACKEND_HOST: "0.0.0.0"
     BACKEND_PORT: "8000"
@@ -63,7 +63,7 @@ frontend:
   image:
     repository: darshan11111/mt-frontend
     tag: "latest"
-    pullPolicy: IfNotPresent
+    pullPolicy: Always
   service:
     type: NodePort
     port: 3000
@@ -73,12 +73,12 @@ frontend:
       cpu: 50m
       memory: 128Mi
     limits:
-      cpu: 300m
+      cpu: 500m
       memory: 512Mi
   hpa:
-    enabled: true
+    enabled: false          # Disabled until cluster is stable
     minReplicas: 1
-    maxReplicas: 3
+    maxReplicas: 2
     targetCPUUtilizationPercentage: 80
   probes:
     liveness:
@@ -92,7 +92,7 @@ frontend:
       periodSeconds: 10
       timeoutSeconds: 5
 
-# -- Ingress Configuration --
+# -- Ingress --
 ingress:
   enabled: true
   className: nginx
@@ -102,7 +102,7 @@ ingress:
     nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
     nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
 
-# -- Secrets (injected from Jenkins at deploy time) --
+# -- Secrets (injected by Jenkins at deploy time via --set) --
 secrets:
   # Groq LLM
   groqApiKey: ""
@@ -110,14 +110,14 @@ secrets:
   groqFastModel: "openai/gpt-oss-20b"
   groqReasoningModel: "openai/gpt-oss-120b"
   groqVisionModel: "openai/gpt-oss-20b"
-  # ElevenLabs Multilingual Voice AI
+  # ElevenLabs
   elevenLabsApiKey: ""
   elevenLabsVoiceId: "gHu9GtaHOXcSqFTK06ux"
   elevenLabsFallbackVoiceId: "EXAVITQu4vr4xnSDxMaL"
   elevenLabsModelId: "eleven_multilingual_v2"
   # Web search
   serperApiKey: ""
-  # Supabase (optional cloud sync)
+  # Supabase (optional - falls back to local SQLite)
   supabaseUrl: ""
   supabaseKey: ""
   supabaseServiceRoleKey: ""
@@ -125,17 +125,18 @@ secrets:
   supabaseSecretKey: ""
   supabaseStorageBucket: "manuals"
 
-# -- Persistent Volume Claims (model cache, database, manuals) --
+# -- Persistent Volume Claims --
+# storageClass: "" uses the cluster's default StorageClass (standard on Minikube, gp2 on EKS)
 persistence:
   enabled: true
-  storageClass: ""
+  storageClass: "standard"   # Minikube default; change to "" for EKS/auto
   accessMode: ReadWriteOnce
-  size: 5Gi         # model_cache
-  manualsSize: 10Gi # uploaded OEM manuals
+  size: 5Gi          # model_cache
+  manualsSize: 5Gi   # uploaded manuals
 
-# -- Observability & Monitoring (Prometheus + Grafana) --
+# -- Observability (Disabled by default to save Minikube resources) --
 monitoring:
-  enabled: true
+  enabled: false     # Set to true once backend + frontend are confirmed healthy
   prometheus:
     image: prom/prometheus:v2.51.0
     port: 9090
