@@ -82,7 +82,7 @@ class OpenAIClient:
         )
 
         if settings.GROQ_API_KEY:
-            preferred = model or (settings.GROQ_VISION_MODEL if has_image else (settings.GROQ_MODEL or "openai/gpt-oss-20b"))
+            preferred = model or (settings.GROQ_VISION_MODEL if has_image else (settings.GROQ_MODEL or "qwen/qwen3.8-27b"))
             candidate_models = []
             if has_image:
                 # Models that support vision/image inputs on Groq
@@ -92,9 +92,9 @@ class OpenAIClient:
             else:
                 for m in [
                     preferred,
-                    "openai/gpt-oss-20b",
-                    "openai/gpt-oss-120b",
                     "qwen/qwen3.8-27b",
+                    "openai/gpt-oss-120b",
+                    "openai/gpt-oss-20b",
                     "qwen/qwen3.6-27b",
                     "groq/compound",
                 ]:
@@ -128,21 +128,27 @@ class OpenAIClient:
                 # gpt-5.5 requires max_completion_tokens (budgeting for reasoning + content)
                 kwargs["max_completion_tokens"] = max(max_tokens or 2500, 2500)
             else:
-                kwargs["max_tokens"] = max_tokens or 2048
+                kwargs["max_tokens"] = min(max_tokens or 1500, 2048)
                 kwargs["temperature"] = temperature
 
-            for attempt in range(4):
+            for attempt in range(2):
                 try:
                     response = self.client.chat.completions.create(**kwargs)
                     return response.choices[0].message.content or ""
                 except Exception as e:
                     err_str = str(e).lower()
+                    if "tokens per day" in err_str or "tpd" in err_str or "model_not_found" in err_str:
+                        # Daily quota exhausted on this model or model missing, instantly try next candidate
+                        logger.debug(f"Model {candidate_model} daily quota or availability limit: {e}. Trying next model...")
+                        last_err = e
+                        break
                     if "429" in err_str or "rate limit" in err_str:
-                        wait_s = 2.5 * (attempt + 1)
-                        logger.info(f"Groq rate limit notice. Backing off {wait_s}s before retry ({attempt + 1}/4)...")
-                        import time
-                        time.sleep(wait_s)
-                        continue
+                        if attempt == 0:
+                            import time
+                            time.sleep(0.5)
+                            continue
+                        last_err = e
+                        break
 
                     # Dynamic parameter recovery
                     if "max_tokens" in err_str and "max_completion_tokens" in err_str:

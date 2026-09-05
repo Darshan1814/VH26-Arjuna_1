@@ -15,7 +15,7 @@ class Settings(BaseSettings):
     GROQ_VISION_MODEL: str = "qwen/qwen3.8-27b"  # Groq multimodal vision model
 
     # --- RapidAPI Google Translate 113 Configuration ---
-    RAPIDAPI_TRANSLATE_KEY: str = "0c41dd989fmsh8331390bf41a4cfp14a23ajsn42c4974f6cb0"
+    RAPIDAPI_TRANSLATE_KEY: str = "b1a558b970msh50fa1ca2ca7b848p115313jsnc47976bd985d"
     RAPIDAPI_TRANSLATE_HOST: str = "google-translate113.p.rapidapi.com"
     RAPIDAPI_TRANSLATE_URL: str = "https://google-translate113.p.rapidapi.com/api/v1/translator"
 

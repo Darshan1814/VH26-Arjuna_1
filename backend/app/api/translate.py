@@ -244,11 +244,15 @@ async def call_rapidapi_google_translate_text(
 
 
 def translate_with_groq_batch(texts: List[str], source: str, target: str) -> List[str]:
-    """Translate a list of strings using the Groq LLM inference engine with structured key-value mapping."""
+    """Translate a list of strings using the ultra-fast Groq LLM inference engine with structured key-value mapping."""
     if not texts:
         return []
     lang_name = LANGUAGE_NAMES.get(target.lower(), target)
     indexed_input = {str(i): text for i, text in enumerate(texts)}
+    
+    # Priority models on Groq: qwen/qwen3.8-27b (sub-second JSON generation), followed by openai/gpt-oss-120b
+    candidate_models = ["qwen/qwen3.8-27b", "openai/gpt-oss-120b", "qwen/qwen3.6-27b", "openai/gpt-oss-20b"]
+    
     try:
         from app.services.llm.openai_client import get_openai_client
         client = get_openai_client()
@@ -260,18 +264,38 @@ def translate_with_groq_batch(texts: List[str], source: str, target: str) -> Lis
             f"2. Return a valid JSON object mapping each index key ('0', '1', ...) directly to its translated string.\n\n"
             f"Input:\n{json.dumps(indexed_input, ensure_ascii=False)}"
         )
-        res = client.json_completion([{"role": "user", "content": prompt}], model="openai/gpt-oss-20b")
-        if isinstance(res, dict):
-            data = res.get("translations", res) if isinstance(res.get("translations"), dict) else res
-            translated_list = []
-            for i, orig in enumerate(texts):
-                val = data.get(str(i)) or data.get(i)
-                if val and isinstance(val, str) and val.strip():
-                    translated_list.append(val.strip())
-                else:
-                    fallback = FALLBACK_DICTIONARY.get(target.lower(), {}).get(orig, orig)
-                    translated_list.append(fallback)
-            return translated_list
+
+        raw_content = None
+        for model in candidate_models:
+            try:
+                resp = client.client.chat.completions.create(
+                    model=model,
+                    messages=[{"role": "user", "content": prompt}],
+                    response_format={"type": "json_object"},
+                    temperature=0.0,
+                    max_tokens=max(300, len(texts) * 35),
+                    timeout=5.0,
+                )
+                raw_content = resp.choices[0].message.content
+                if raw_content:
+                    break
+            except Exception as model_err:
+                logger.debug(f"Translation model {model} attempt error: {model_err}")
+                continue
+
+        if raw_content:
+            data = json.loads(raw_content)
+            if isinstance(data, dict):
+                inner = data.get("translations", data) if isinstance(data.get("translations"), dict) else data
+                translated_list = []
+                for i, orig in enumerate(texts):
+                    val = inner.get(str(i)) or inner.get(i)
+                    if val and isinstance(val, str) and val.strip():
+                        translated_list.append(val.strip())
+                    else:
+                        fallback = FALLBACK_DICTIONARY.get(target.lower(), {}).get(orig, orig)
+                        translated_list.append(fallback)
+                return translated_list
     except Exception as e:
         logger.error(f"Groq batch translation failed: {e}")
 
@@ -355,7 +379,7 @@ async def translate_text(req: TranslateRequest):
 
     # Step B: Translate uncached items
     if uncached_texts:
-        CHUNK_SIZE = 40
+        CHUNK_SIZE = 15
         for i in range(0, len(uncached_texts), CHUNK_SIZE):
             chunk_texts = uncached_texts[i:i + CHUNK_SIZE]
             chunk_indices = uncached_indices[i:i + CHUNK_SIZE]
