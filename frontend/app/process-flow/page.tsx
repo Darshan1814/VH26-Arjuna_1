@@ -110,10 +110,8 @@ export default function ProcessFlowPage() {
   const [isAutoPlay, setIsAutoPlay] = useState<boolean>(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Interactive inputs for Step 6
-  const [queryInput, setQueryInput] = useState<string>(
-    "Why is the motor making a chattering noise and not starting on my PhaseMaker Rotary Converter?"
-  );
+  // Interactive inputs for Step 8
+  const [queryInput, setQueryInput] = useState<string>("");
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -156,6 +154,9 @@ export default function ProcessFlowPage() {
         [stepNum]: res.telemetry,
       }));
       setCurrentStep(stepNum);
+      if (stepNum === 3 && res.telemetry?.suggested_queries?.length > 0 && !queryInput) {
+        setQueryInput(res.telemetry.suggested_queries[0]);
+      }
       return res.telemetry;
     } catch (err: any) {
       setErrorMessage(`Step ${stepNum} failed: ${err.message}`);
@@ -226,6 +227,10 @@ export default function ProcessFlowPage() {
     try {
       const filesArray = Array.from(e.target.files);
       await uploadFlowFiles(filesArray, sessionId);
+      // Reset all downstream telemetry and query so pipeline strictly processes the new document
+      setStepTelemetry({});
+      setCurrentStep(1);
+      setQueryInput("");
       // Re-run Step 1 with new file
       await runStep(1);
     } catch (err: any) {
@@ -447,11 +452,22 @@ export default function ProcessFlowPage() {
             )}
 
             {/* Step 8 Query Selection / Input & Verification */}
+            {/* Step 8 Query Selection / Input & Verification */}
             {currentStep === 8 && (
               <div className="space-y-3 pt-1">
-                <label className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block">
-                  {t("Equipment Troubleshooting Query:")}
-                </label>
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block">
+                    {t("Equipment Troubleshooting Query:")}
+                  </label>
+                  {queryInput && (
+                    <button
+                      onClick={() => setQueryInput("")}
+                      className="text-[10px] text-[var(--color-text-muted)] hover:text-red-500 underline cursor-pointer"
+                    >
+                      {t("Clear")}
+                    </button>
+                  )}
+                </div>
                 <textarea
                   value={queryInput}
                   onChange={(e) => setQueryInput(e.target.value)}
@@ -461,23 +477,28 @@ export default function ProcessFlowPage() {
                 />
                 <div className="space-y-1">
                   <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">
-                    {t("Derived from Manual:")}
+                    {t("Derived from Uploaded Manual:")}
                   </span>
-                  {[
-                    "Why is the motor making a chattering noise on PhaseMaker Rotary Converter?",
-                    "How to turn ON the Rotary Converter for RC10 and larger models?",
-                    "What size PhaseMaker RC model is required for a 7.5 kW motor?",
-                    "How to connect the Soft Starter to U1, V1, W1 on the load motor?",
-                    "PhaseMaker रोटरी कनवर्टर पर 7.5 kW मोटर के लिए कौन सा RC मॉडल चाहिए?",
-                  ].map((q, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => setQueryInput(q)}
-                      className="block text-left text-[11px] text-[var(--color-primary)] hover:underline truncate w-full cursor-pointer"
-                    >
-                      • {t(q)}
-                    </button>
-                  ))}
+                  {(() => {
+                    const machine = stepTelemetry[3]?.detected_machine || stepTelemetry[1]?.document_profile?.equipment_name || "Equipment";
+                    const dynamicSuggestions: string[] = 
+                      stepTelemetry[8]?.suggested_queries ||
+                      stepTelemetry[3]?.suggested_queries || [
+                        `What are the primary troubleshooting procedures for ${machine}?`,
+                        `How do I verify starting circuit voltage and power supply for ${machine}?`,
+                        `What safety precautions must be followed when operating ${machine}?`,
+                        `What are the key electrical ratings and operating specifications for ${machine}?`,
+                      ];
+                    return dynamicSuggestions.slice(0, 5).map((q: string, idx: number) => (
+                      <button
+                        key={idx}
+                        onClick={() => setQueryInput(q)}
+                        className="block text-left text-[11px] text-[var(--color-primary)] hover:underline truncate w-full cursor-pointer"
+                      >
+                        • {t(q)}
+                      </button>
+                    ));
+                  })()}
                 </div>
               </div>
             )}

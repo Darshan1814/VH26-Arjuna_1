@@ -244,8 +244,8 @@ class RAGPipeline:
         report_payload = {
             "report_id": report_id,
             "query": query,
-            "machine_model": target_machine or "PhaseMaker Rotary Converter",
-            "error_code": detected_errors[0] if detected_errors else "CHATTERING_NOISE",
+            "machine_model": target_machine or (citations[0].manual if citations else "Industrial Equipment"),
+            "error_code": detected_errors[0] if detected_errors else "OPERATIONAL_DIAGNOSIS",
             "problem": gen_output.get("problem") or query,
             "diagnosis": gen_output.get("diagnosis", ""),
             "probable_causes": gen_output.get("probable_causes", []),

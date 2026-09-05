@@ -38,34 +38,56 @@ async def get_manual_suggestions():
     import os
     suggestions = []
     
-    # Check manuals directory
+    # Check SQLite storage and manuals directory
     manual_names = []
+    try:
+        from app.core.sqlite_storage import get_sqlite_storage
+        docs = get_sqlite_storage().list_documents()
+        for d in docs:
+            fn = d.get("filename")
+            if fn and fn not in manual_names:
+                manual_names.append(fn)
+    except Exception as e:
+        logger.warning(f"Could not query SQLite documents: {e}")
+
     if os.path.exists(settings.MANUALS_DIR):
-        manual_names = [f for f in os.listdir(settings.MANUALS_DIR) if not f.startswith(".") and f.endswith(".pdf")]
+        for f in os.listdir(settings.MANUALS_DIR):
+            if not f.startswith(".") and f.lower().endswith((".pdf", ".txt", ".docx", ".csv", ".log")) and f not in manual_names:
+                manual_names.append(f)
 
-    has_phasemaker = any("phase" in f.lower() or "maker" in f.lower() or "converter" in f.lower() for f in manual_names)
+    if manual_names:
+        first_manual = manual_names[0]
+        # Clean prefix and extensions
+        clean_name = first_manual
+        for prefix in ["FLOW-XULLQP_", "FLOW-"]:
+            if clean_name.startswith(prefix):
+                clean_name = clean_name[len(prefix):]
+        for ext in [".pdf", ".txt", ".docx", ".csv", ".log"]:
+            if clean_name.lower().endswith(ext):
+                clean_name = clean_name[:-len(ext)]
+        clean_name = clean_name.replace("_", " ").replace("-", " ").strip()
 
-    if has_phasemaker or not manual_names:
         suggestions = [
-            "Why is the load motor making a chattering noise on the PhaseMaker Rotary Converter?",
-            "How to turn ON the Rotary Converter for RC10 and larger models?",
-            "What size PhaseMaker RC model is required for a 7.5 kW motor?",
-            "How to connect the Soft Starter to U1, V1, W1 on the load motor?",
-            "What should I do if the Idler motor does not run after 4-5 seconds of pressing START?",
+            f"What are the primary troubleshooting procedures in {clean_name}?",
+            f"How do I verify starting circuit voltage and power supply for {clean_name}?",
+            f"What safety precautions must be followed before servicing {clean_name}?",
+            f"What are the recommended operating specifications for {clean_name}?",
+            f"How to diagnose error codes and failure symptoms in {clean_name}?",
         ]
+        active_title = f"{clean_name} Manual"
     else:
-        first_manual = manual_names[0].replace(".pdf", "").replace("_", " ")
+        active_title = "Standard Equipment Manual"
         suggestions = [
-            f"What are the primary troubleshooting procedures in {first_manual}?",
-            f"How do I verify starting circuit voltage and current for {first_manual}?",
-            f"What safety precautions must be followed before servicing {first_manual}?",
-            f"What are the recommended operating conditions for {first_manual}?",
+            "What are the primary troubleshooting procedures for this equipment?",
+            "How do I verify starting circuit voltage and power supply?",
+            "What safety precautions must be followed before servicing?",
+            "What are the recommended operating specifications?",
         ]
 
     return {
         "status": "success",
         "manuals_count": len(manual_names),
-        "active_manual": manual_names[0] if manual_names else "PhaseMaker Rotary Converter Manual",
+        "active_manual": active_title,
         "suggestions": suggestions,
     }
 

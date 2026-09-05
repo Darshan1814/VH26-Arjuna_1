@@ -67,7 +67,7 @@ async def upload_knowledge(
                 # 5. Insert into Supabase if configured
                 try:
                     client = get_supabase_client()
-                    effective_model = machine_model or norm_doc.machine_model or "PhaseMaker Rotary Converter"
+                    effective_model = machine_model or norm_doc.machine_model or os.path.splitext(file.filename or "Industrial_Equipment")[0].replace("_", " ")
                     mach_res = client.table("machines").select("id").eq("model_number", effective_model).execute()
                     if mach_res.data:
                         machine_id = mach_res.data[0]["id"]

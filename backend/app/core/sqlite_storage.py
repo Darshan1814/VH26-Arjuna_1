@@ -495,6 +495,7 @@ class SQLiteStorage:
         machine_model: Optional[str] = None,
         error_code: Optional[str] = None,
         query_vector: Optional[list[float]] = None,
+        session_id: Optional[str] = None,
         top_k: int = 10,
     ) -> list[dict[str, Any]]:
         """Search chunks in SQLite using exact error match, keyword match, and cosine similarity."""
@@ -504,8 +505,12 @@ class SQLiteStorage:
             query = "SELECT * FROM chunks WHERE 1=1"
             params: list[Any] = []
 
+            if session_id:
+                query += " AND (session_id = ?)"
+                params.append(session_id)
+
             if machine_model:
-                query += " AND (machine_model LIKE ? OR machine LIKE ? OR model LIKE ? OR machine_model IS NULL)"
+                query += " AND (machine_model LIKE ? OR machine LIKE ? OR model LIKE ?)"
                 params.extend([f"%{machine_model}%", f"%{machine_model}%", f"%{machine_model}%"])
 
             cursor.execute(query, params)
