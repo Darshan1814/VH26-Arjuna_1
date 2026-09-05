@@ -56,8 +56,9 @@ echo "Stopping old containers..."
 docker stop mt-backend mt-frontend 2>/dev/null || true
 docker rm -f mt-backend mt-frontend 2>/dev/null || true
 
-# 3. Ensure Docker volumes exist for state persistence
-echo "Ensuring Docker storage volumes exist..."
+# 3. Ensure Docker network and volumes exist for state persistence
+echo "Ensuring Docker network and storage volumes exist..."
+docker network inspect mt-network >/dev/null 2>&1 || docker network create mt-network
 docker volume create mt-manuals 2>/dev/null || true
 docker volume create mt-database 2>/dev/null || true
 docker volume create mt-model-cache 2>/dev/null || true
@@ -65,48 +66,28 @@ docker volume create mt-model-cache 2>/dev/null || true
 # 4. Launch Backend container
 echo "Launching mt-backend container..."
 docker rm -f mt-backend 2>/dev/null || true
-if ! docker run -d \
+docker run -d \
     --name mt-backend \
-    --network host \
+    --network mt-network \
+    --network-alias backend \
     --restart unless-stopped \
+    -p 8000:8000 \
     --env-file "$ENV_FILE" \
     -v mt-manuals:/app/manuals \
     -v mt-database:/app/database \
     -v mt-model-cache:/app/model_cache \
-    "${BACKEND_IMG}:${TAG}" 2>/dev/null; then
-    
-    echo "Host network unavailable, falling back to port 8000:8000..."
-    docker rm -f mt-backend 2>/dev/null || true
-    docker run -d \
-        --name mt-backend \
-        -p 8000:8000 \
-        --restart unless-stopped \
-        --env-file "$ENV_FILE" \
-        -v mt-manuals:/app/manuals \
-        -v mt-database:/app/database \
-        -v mt-model-cache:/app/model_cache \
-        "${BACKEND_IMG}:${TAG}" || true
-fi
+    "${BACKEND_IMG}:${TAG}"
 
 # 5. Launch Frontend container
 echo "Launching mt-frontend container..."
 docker rm -f mt-frontend 2>/dev/null || true
-if ! docker run -d \
+docker run -d \
     --name mt-frontend \
-    --network host \
+    --network mt-network \
     --restart unless-stopped \
-    -e BACKEND_URL="http://localhost:8000" \
-    "${FRONTEND_IMG}:${TAG}" 2>/dev/null; then
-
-    echo "Host network unavailable, falling back to port 3000:3000..."
-    docker rm -f mt-frontend 2>/dev/null || true
-    docker run -d \
-        --name mt-frontend \
-        -p 3000:3000 \
-        --restart unless-stopped \
-        -e BACKEND_URL="http://localhost:8000" \
-        "${FRONTEND_IMG}:${TAG}" || true
-fi
+    -p 3000:3000 \
+    -e BACKEND_URL="http://mt-backend:8000" \
+    "${FRONTEND_IMG}:${TAG}"
 
 # 6. Wait for initialization
 echo "Waiting 15s for containers to initialize..."
