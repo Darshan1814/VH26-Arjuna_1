@@ -219,86 +219,72 @@ pipeline {
         }
 
         // ============================================================
-        // STAGE 7: Deploy Directly to Production (Docker Compose)
+        // STAGE 7: Deploy Directly to Production (Docker)
         // ============================================================
-        stage('Deploy to Production (Docker Compose)') {
+        stage('Deploy to Production (Docker)') {
             steps {
-                echo "===> Deploying directly to production using Docker Compose..."
-                script {
-                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                        sh """
-                            export PATH="\$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/snap/bin:\$HOME/bin:\$HOME/.local/bin"
+                echo "===> Deploying directly to production using Docker..."
+                sh """
+                    export PATH="\$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/snap/bin:\$HOME/bin:\$HOME/.local/bin"
 
-                            # --- Generate production .env without heredoc ---
-                            echo "Writing production .env file..."
-                            echo "GROQ_API_KEY=${GROQ_API_KEY}" > .env
-                            echo "GROQ_MODEL=${GROQ_MODEL}" >> .env
-                            echo "GROQ_FAST_MODEL=${GROQ_FAST_MODEL}" >> .env
-                            echo "GROQ_REASONING_MODEL=${GROQ_REASONING_MODEL}" >> .env
-                            echo "GROQ_VISION_MODEL=${GROQ_VISION_MODEL}" >> .env
-                            echo "ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}" >> .env
-                            echo "ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}" >> .env
-                            echo "ELEVENLABS_FALLBACK_VOICE_ID=${ELEVENLABS_FALLBACK_VOICE_ID}" >> .env
-                            echo "ELEVENLABS_MODEL_ID=${ELEVENLABS_MODEL_ID}" >> .env
-                            echo "SERPER_API_KEY=${SERPER_API_KEY}" >> .env
-                            echo "SUPABASE_URL=${SUPABASE_URL}" >> .env
-                            echo "SUPABASE_KEY=${SUPABASE_KEY}" >> .env
-                            echo "SUPABASE_ANON_KEY=${SUPABASE_KEY}" >> .env
-                            echo "SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}" >> .env
-                            echo "SUPABASE_STORAGE_BUCKET=manuals" >> .env
-                            echo "EMBEDDING_MODEL=BAAI/bge-m3" >> .env
-                            echo "EMBEDDING_DIMENSION=1024" >> .env
-                            echo "RERANKER_MODEL=BAAI/bge-reranker-v2-m3" >> .env
-                            echo "HF_HOME=/app/model_cache" >> .env
-                            echo "MANUALS_DIR=/app/manuals" >> .env
-                            echo "SQLITE_DB_PATH=/app/database/troubleshooter.db" >> .env
-                            echo "BACKEND_HOST=0.0.0.0" >> .env
-                            echo "BACKEND_PORT=8000" >> .env
-                            echo "LOG_LEVEL=info" >> .env
-                            echo "NEXT_PUBLIC_API_URL=" >> .env
-                            echo "NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}" >> .env
-                            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_KEY}" >> .env
-                            echo "BACKEND_URL=http://backend:8000" >> .env
-                            echo "DATA_VOLUME_PATH=." >> .env
+                    # --- Generate production .env file ---
+                    echo "Writing production .env file..."
+                    echo "GROQ_API_KEY=${GROQ_API_KEY}" > .env
+                    echo "GROQ_MODEL=${GROQ_MODEL}" >> .env
+                    echo "GROQ_FAST_MODEL=${GROQ_FAST_MODEL}" >> .env
+                    echo "GROQ_REASONING_MODEL=${GROQ_REASONING_MODEL}" >> .env
+                    echo "GROQ_VISION_MODEL=${GROQ_VISION_MODEL}" >> .env
+                    echo "ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}" >> .env
+                    echo "ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}" >> .env
+                    echo "ELEVENLABS_FALLBACK_VOICE_ID=${ELEVENLABS_FALLBACK_VOICE_ID}" >> .env
+                    echo "ELEVENLABS_MODEL_ID=${ELEVENLABS_MODEL_ID}" >> .env
+                    echo "SERPER_API_KEY=${SERPER_API_KEY}" >> .env
+                    echo "SUPABASE_URL=${SUPABASE_URL}" >> .env
+                    echo "SUPABASE_KEY=${SUPABASE_KEY}" >> .env
+                    echo "SUPABASE_ANON_KEY=${SUPABASE_KEY}" >> .env
+                    echo "SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}" >> .env
+                    echo "SUPABASE_STORAGE_BUCKET=manuals" >> .env
+                    echo "EMBEDDING_MODEL=BAAI/bge-m3" >> .env
+                    echo "EMBEDDING_DIMENSION=1024" >> .env
+                    echo "RERANKER_MODEL=BAAI/bge-reranker-v2-m3" >> .env
+                    echo "HF_HOME=/app/model_cache" >> .env
+                    echo "MANUALS_DIR=/app/manuals" >> .env
+                    echo "SQLITE_DB_PATH=/app/database/troubleshooter.db" >> .env
+                    echo "BACKEND_HOST=0.0.0.0" >> .env
+                    echo "BACKEND_PORT=8000" >> .env
+                    echo "LOG_LEVEL=info" >> .env
+                    echo "BACKEND_URL=http://mt-backend:8000" >> .env
 
-                            # --- Tag built images as latest for local runner ---
-                            echo "Tagging production images..."
-                            docker tag ${BACKEND_IMAGE}:${IMAGE_TAG} ${BACKEND_IMAGE}:latest 2>/dev/null || true
-                            docker tag ${FRONTEND_IMAGE}:${IMAGE_TAG} ${FRONTEND_IMAGE}:latest 2>/dev/null || true
+                    # --- Prepare network & directories ---
+                    echo "Creating network and host directories..."
+                    docker network inspect mt-network >/dev/null 2>&1 || docker network create mt-network
+                    mkdir -p manuals database model_cache
 
-                            # --- Determine compose command ---
-                            if docker compose version >/dev/null 2>&1; then
-                                COMPOSE_CMD="docker compose"
-                            elif docker-compose version >/dev/null 2>&1; then
-                                COMPOSE_CMD="docker-compose"
-                            else
-                                echo "WARNING: Neither docker compose nor docker-compose found in PATH."
-                                COMPOSE_CMD="docker compose"
-                            fi
-                            echo "Using compose command: \$COMPOSE_CMD"
+                    # --- Stop & remove previous containers ---
+                    echo "Cleaning up previous containers..."
+                    docker rm -f mt-backend mt-frontend 2>/dev/null || true
 
-                            # --- Restart containers directly ---
-                            echo "Restarting production containers..."
-                            \$COMPOSE_CMD down --remove-orphans 2>/dev/null || true
-                            \$COMPOSE_CMD up -d --force-recreate backend frontend
+                    # --- Run Backend Container ---
+                    echo "Starting Backend container..."
+                    docker run -d --name mt-backend --network mt-network --network-alias backend --restart unless-stopped -p 8000:8000 --env-file .env -v "\$PWD/manuals:/app/manuals" -v "\$PWD/database:/app/database" -v "\$PWD/model_cache:/app/model_cache" ${BACKEND_IMAGE}:${IMAGE_TAG}
 
-                            echo "Waiting 25s for containers to initialize..."
-                            sleep 25
+                    # --- Run Frontend Container ---
+                    echo "Starting Frontend container..."
+                    docker run -d --name mt-frontend --network mt-network --restart unless-stopped -p 3000:3000 -e BACKEND_URL=http://mt-backend:8000 ${FRONTEND_IMAGE}:${IMAGE_TAG}
 
-                            # --- Verify health ---
-                            echo "=== Container Status ==="
-                            \$COMPOSE_CMD ps || true
+                    # --- Wait & Health Checks ---
+                    echo "Waiting 20s for containers to initialize..."
+                    sleep 20
 
-                            echo "=== Health Checks ==="
-                            curl -sf http://localhost:8000/health \
-                                && echo "BACKEND: HEALTHY (:8000)" || echo "Backend initializing..."
-                            curl -sf -o /dev/null http://localhost:3000 \
-                                && echo "FRONTEND: HEALTHY (:3000)" || echo "Frontend initializing..."
+                    echo "=== Active Production Containers ==="
+                    docker ps --filter "name=mt-"
 
-                            echo "=== Deployment Complete: Build #${IMAGE_TAG} is LIVE in Production! ==="
-                        """
-                    }
-                }
+                    echo "=== Health Checks ==="
+                    curl -sf http://localhost:8000/health && echo "BACKEND: HEALTHY (:8000)" || echo "Backend initializing..."
+                    curl -sf -o /dev/null http://localhost:3000 && echo "FRONTEND: HEALTHY (:3000)" || echo "Frontend initializing..."
+
+                    echo "=== Deployment Complete: Build #${IMAGE_TAG} is LIVE in Production! ==="
+                """
             }
         }
 
