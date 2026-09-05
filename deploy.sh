@@ -66,9 +66,11 @@ if command -v minikube >/dev/null 2>&1; then
 fi
 
 # Configure host Nginx so port 80 (machfixai.in) cleanly proxies to port 3000
-if command -v nginx >/dev/null 2>&1 && [ -d /etc/nginx ]; then
+if command -v nginx >/dev/null 2>&1; then
     echo "Updating host Nginx configuration for machfixai.in..."
-    cat << 'NGINX_EOF' | sudo tee /etc/nginx/sites-available/default >/dev/null 2>&1 || true
+    sudo mkdir -p /etc/nginx/conf.d /etc/nginx/sites-available /etc/nginx/sites-enabled 2>/dev/null || true
+
+    cat << 'NGINX_EOF' | sudo tee /tmp/machfixai_nginx.conf >/dev/null 2>&1 || true
 server {
     listen 80 default_server;
     listen [::]:80 default_server;
@@ -89,8 +91,17 @@ server {
     }
 }
 NGINX_EOF
+
+    # Apply to conf.d (official Nginx mainline like 1.30)
+    sudo cp -f /tmp/machfixai_nginx.conf /etc/nginx/conf.d/default.conf 2>/dev/null || true
+    sudo cp -f /tmp/machfixai_nginx.conf /etc/nginx/conf.d/machfixai.conf 2>/dev/null || true
+
+    # Apply to sites-available / sites-enabled (Debian/Ubuntu style)
+    sudo cp -f /tmp/machfixai_nginx.conf /etc/nginx/sites-available/default 2>/dev/null || true
     sudo ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default 2>/dev/null || true
-    sudo nginx -t >/dev/null 2>&1 && (sudo systemctl restart nginx 2>/dev/null || sudo service nginx restart 2>/dev/null || true)
+
+    # Reload / Restart Nginx
+    sudo nginx -t >/dev/null 2>&1 && (sudo systemctl restart nginx 2>/dev/null || sudo service nginx restart 2>/dev/null || sudo nginx -s reload 2>/dev/null || true)
 fi
 
 # 3. Ensure Docker network and volumes exist for state persistence
