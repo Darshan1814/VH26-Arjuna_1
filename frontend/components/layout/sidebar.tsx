@@ -120,8 +120,12 @@ export function Sidebar() {
             className="flex items-center gap-2.5 font-bold text-[var(--color-text)] group overflow-hidden"
             title="MachFixAI"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--color-primary)] text-white shadow-xs group-hover:scale-105 transition-transform flex-shrink-0">
-              <Wrench className="h-4 w-4" />
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-500/10 dark:bg-amber-400/10 border border-amber-500/20 p-0.5 shadow-xs group-hover:scale-105 transition-transform flex-shrink-0 overflow-hidden">
+              <img
+                src="/logo.png"
+                alt="MachFixAI Logo"
+                className="h-full w-full object-contain rounded-lg"
+              />
             </div>
 
             {/* Title visible only when expanded or on mobile drawer */}

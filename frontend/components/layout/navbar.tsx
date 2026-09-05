@@ -33,7 +33,13 @@ export function Navbar() {
       <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
         {/* Logo / App Name */}
         <Link href="/" className="flex items-center gap-2 font-semibold text-[var(--color-text)]">
-          <Wrench className="h-5 w-5 text-[var(--color-primary)]" />
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 dark:bg-amber-400/10 border border-amber-500/20 p-0.5 overflow-hidden">
+            <img
+              src="/logo.png"
+              alt="MachFixAI Logo"
+              className="h-full w-full object-contain rounded-md"
+            />
+          </div>
           <span className="hidden sm:inline">MachFixAI</span>
           <span className="sm:hidden">MFAI</span>
         </Link>

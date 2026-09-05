@@ -91,8 +91,12 @@ export function AppHeader() {
             href="/"
             className="flex items-center gap-1.5 font-bold text-[var(--color-text)] lg:hidden flex-shrink-0"
           >
-            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-[var(--color-primary)] text-white shadow-xs">
-              <Wrench className="h-3.5 w-3.5" />
+            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/10 dark:bg-amber-400/10 border border-amber-500/20 p-0.5 shadow-xs flex-shrink-0 overflow-hidden">
+              <img
+                src="/logo.png"
+                alt="MachFixAI Logo"
+                className="h-full w-full object-contain rounded-md"
+              />
             </div>
           </Link>
           <div className="flex flex-col justify-center min-w-0">

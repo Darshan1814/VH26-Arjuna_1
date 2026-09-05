@@ -251,12 +251,16 @@ function EmptyState({
 
   return (
     <div className="flex h-full flex-col items-center justify-center text-center px-4 max-w-xl mx-auto py-8">
-      <div className="rounded-2xl bg-[var(--color-surface-elevated)] border border-[var(--color-border)] p-4 mb-4 shadow-sm">
-        <Wrench className="h-8 w-8 text-[var(--color-primary)] mx-auto" />
+      <div className="rounded-2xl bg-amber-500/10 dark:bg-amber-400/10 border border-amber-500/20 p-2 mb-4 shadow-sm h-16 w-16 flex items-center justify-center overflow-hidden">
+        <img
+          src="/logo.png"
+          alt="MachFixAI Logo"
+          className="h-full w-full object-contain"
+        />
       </div>
 
       <h2 className="text-xl font-bold text-[var(--color-text)] mb-1">
-        {t("Industrial Machine Troubleshooting")}
+        MachFixAI {t("Industrial Machine Troubleshooting")}
       </h2>
 
       <p className="text-xs text-[var(--color-text-secondary)] max-w-md mx-auto mb-4 leading-relaxed">
