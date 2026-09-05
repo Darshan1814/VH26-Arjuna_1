@@ -28,7 +28,7 @@ class OpenAIClient:
                     base_url="https://api.groq.com/openai/v1",
                     api_key=settings.GROQ_API_KEY,
                     max_retries=0,
-                    timeout=20.0,
+                    timeout=60.0,  # 60s — vision calls need more time than text
                 )
                 self._is_groq = True
                 self._is_azure = False
@@ -73,12 +73,33 @@ class OpenAIClient:
         model: Optional[str] = None,
     ) -> str:
         """Execute a chat completion with model fallback, optimized for Groq and OpenAI."""
+        has_image = any(
+            isinstance(msg.get("content"), list) and any(
+                isinstance(item, dict) and item.get("type") == "image_url"
+                for item in msg.get("content", [])
+            )
+            for msg in messages if isinstance(msg, dict)
+        )
+
         if settings.GROQ_API_KEY:
-            preferred = model or settings.GROQ_MODEL or "openai/gpt-oss-20b"
+            preferred = model or (settings.GROQ_VISION_MODEL if has_image else (settings.GROQ_MODEL or "openai/gpt-oss-20b"))
             candidate_models = []
-            for m in [preferred, "openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "qwen/qwen3.6-27b", "groq/compound-mini"]:
-                if m and m not in candidate_models:
-                    candidate_models.append(m)
+            if has_image:
+                # Models that support vision/image inputs on Groq
+                for m in [preferred, "qwen/qwen3.8-27b", "qwen/qwen3.6-27b"]:
+                    if m and m not in candidate_models:
+                        candidate_models.append(m)
+            else:
+                for m in [
+                    preferred,
+                    "openai/gpt-oss-20b",
+                    "openai/gpt-oss-120b",
+                    "qwen/qwen3.8-27b",
+                    "qwen/qwen3.6-27b",
+                    "groq/compound",
+                ]:
+                    if m and m not in candidate_models:
+                        candidate_models.append(m)
         else:
             candidate_models = [model] if model else ["gpt-5.5"]
             for fallback in [settings.MODEL_GEN, settings.AZURE_OPENAI_DEPLOYMENT, "gpt-5.4", "gpt-5-mini", "gpt-4o"]:

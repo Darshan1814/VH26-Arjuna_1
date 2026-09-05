@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     GROQ_MODEL: str = "openai/gpt-oss-120b"
     GROQ_FAST_MODEL: str = "openai/gpt-oss-20b"
     GROQ_REASONING_MODEL: str = "openai/gpt-oss-120b"
-    GROQ_VISION_MODEL: str = "openai/gpt-oss-20b"
+    GROQ_VISION_MODEL: str = "qwen/qwen3.8-27b"  # Groq multimodal vision model
 
     # --- RapidAPI Google Translate 113 Configuration ---
     RAPIDAPI_TRANSLATE_KEY: str = "0c41dd989fmsh8331390bf41a4cfp14a23ajsn42c4974f6cb0"
@@ -76,7 +76,10 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Ensure required local storage directories exist
-os.makedirs(settings.MANUALS_DIR, exist_ok=True)
-os.makedirs(settings.EVIDENCE_DIR, exist_ok=True)
-os.makedirs(settings.REPORTS_DIR, exist_ok=True)
+# Ensure required local storage directories exist (best effort)
+try:
+    os.makedirs(settings.MANUALS_DIR, exist_ok=True)
+    os.makedirs(settings.EVIDENCE_DIR, exist_ok=True)
+    os.makedirs(settings.REPORTS_DIR, exist_ok=True)
+except Exception as e:
+    pass
