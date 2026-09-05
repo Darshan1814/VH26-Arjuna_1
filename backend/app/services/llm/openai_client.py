@@ -27,7 +27,7 @@ class OpenAIClient:
                     base_url="https://api.groq.com/openai/v1",
                     api_key=settings.GROQ_API_KEY,
                     max_retries=0,
-                    timeout=20.0,
+                    timeout=60.0,  # 60s — vision calls need more time than text
                 )
                 self._is_azure = False
                 logger.info(f"Initialized ultra-fast Groq LLM client (model: {settings.GROQ_MODEL})")
@@ -70,7 +70,14 @@ class OpenAIClient:
         if settings.GROQ_API_KEY:
             preferred = model or settings.GROQ_REASONING_MODEL or settings.GROQ_MODEL
             candidate_models = []
-            for m in [preferred, "openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "qwen/qwen3.6-27b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
+            # Only use real Groq-supported model IDs
+            for m in [
+                preferred,
+                "llama-3.3-70b-versatile",
+                "llama-3.1-70b-versatile",
+                "llama-3.1-8b-instant",
+                "gemma2-9b-it",
+            ]:
                 if m and m not in candidate_models:
                     candidate_models.append(m)
         else:
