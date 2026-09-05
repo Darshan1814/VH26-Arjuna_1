@@ -141,15 +141,13 @@ export default function ImageAnalysisPage() {
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
               <Camera className="h-3.5 w-3.5" />
-              Vision & Optical Character Recognition (OCR)
+              {t("Vision & Optical Character Recognition (OCR)")}
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--color-text)]">
-              Image Analysis & Error Solving
+              {t("Image Analysis & Error Solving")}
             </h1>
             <p className="text-sm text-[var(--color-text-secondary)] max-w-3xl">
-              Upload machine alarm screen photos, indicator panels, digital gauge readouts, or damaged components.
-              High-precision OCR extracts alphanumeric fault codes, and the system synthesizes comprehensive troubleshooting
-              guidance backed by verified web proof links.
+              {t("Upload machine alarm screen photos, indicator panels, digital gauge readouts, or damaged components. High-precision OCR extracts alphanumeric fault codes, and the system synthesizes comprehensive troubleshooting guidance backed by verified web proof links.")}
             </p>
           </div>
         </div>
@@ -160,7 +158,7 @@ export default function ImageAnalysisPage() {
           <div className="lg:col-span-1 space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xs">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text)] flex items-center gap-2">
               <Upload className="h-4 w-4 text-[var(--color-primary)]" />
-              1. Upload Machine Image
+              {t("1. Upload Machine Image")}
             </h2>
 
             {/* Dropzone */}

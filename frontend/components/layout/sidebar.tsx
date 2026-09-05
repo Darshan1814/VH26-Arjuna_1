@@ -33,7 +33,7 @@ export function Sidebar() {
       label: t("Chatbot"),
       icon: MessageSquare,
       isExternal: false,
-      desc: "Interactive troubleshooting",
+      desc: t("Interactive troubleshooting"),
     },
     {
       href: "/arjuna-sarthi",
@@ -42,49 +42,49 @@ export function Sidebar() {
       isCustomLogo: true,
       badge: "NEW EXT",
       isExternal: false,
-      desc: "AI Web Intelligence Extension",
+      desc: t("AI Web Intelligence Extension"),
     },
     {
       href: "/what-if",
       label: t("What-If Simulator"),
       icon: HelpCircle,
       isExternal: false,
-      desc: "Failure mode simulation",
+      desc: t("Failure mode simulation"),
     },
     {
       href: "/image-analysis",
       label: t("Image Analysis"),
       icon: Camera,
       isExternal: false,
-      desc: "OCR & visual error solving",
+      desc: t("OCR & visual error solving"),
     },
     {
       href: "/voice-assistant",
       label: t("Voice Assistant"),
       icon: Mic,
       isExternal: false,
-      desc: "Multilingual voice AI (मराठी, हिंदी, English)",
+      desc: t("Multilingual voice AI (मराठी, हिंदी, English)"),
     },
     {
       href: "/error-research",
       label: t("Error Research"),
       icon: BookOpen,
       isExternal: false,
-      desc: "IEEE papers & OEM service bulletins",
+      desc: t("IEEE papers & OEM service bulletins"),
     },
     {
       href: "/document-intelligence",
       label: t("Doc & Video Intelligence"),
       icon: Film,
       isExternal: false,
-      desc: "Doc roadmap & YouTube video cards",
+      desc: t("Doc roadmap & YouTube video cards"),
     },
     {
       href: "/process-flow",
       label: t("Process Flow"),
       icon: GitBranch,
       isExternal: false,
-      desc: "Observable 8-stage pipeline",
+      desc: t("Observable 8-stage pipeline"),
     },
   ];
 
@@ -118,7 +118,7 @@ export function Sidebar() {
             href="/"
             onClick={closeMobile}
             className="flex items-center gap-2.5 font-bold text-[var(--color-text)] group overflow-hidden"
-            title="Machine Troubleshooter"
+            title={t("Machine Troubleshooter")}
           >
             <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[var(--color-primary)] text-white shadow-xs group-hover:scale-105 transition-transform flex-shrink-0">
               <Wrench className="h-4 w-4" />
@@ -128,10 +128,10 @@ export function Sidebar() {
             {(!isCollapsed || isMobileOpen) && (
               <div className="flex flex-col min-w-0 transition-opacity duration-150">
                 <span className="text-xs font-bold tracking-tight text-[var(--color-text)] truncate">
-                  Troubleshooter
+                  {t("Troubleshooter")}
                 </span>
                 <span className="text-[9px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider truncate">
-                  Industrial AI
+                  {t("Industrial AI")}
                 </span>
               </div>
             )}
@@ -153,8 +153,8 @@ export function Sidebar() {
               type="button"
               onClick={toggleCollapse}
               className="hidden lg:flex p-1.5 rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-elevated)] transition cursor-pointer"
-              title="Collapse sidebar"
-              aria-label="Collapse sidebar"
+              title={t("Collapse sidebar")}
+              aria-label={t("Collapse sidebar")}
             >
               <PanelLeftClose className="h-4 w-4" />
             </button>
@@ -165,13 +165,12 @@ export function Sidebar() {
         <nav className="flex-1 overflow-y-auto px-2.5 py-3 space-y-1">
           {(!isCollapsed || isMobileOpen) && (
             <div className="px-2 pb-1.5 text-[9px] font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-              Features & Tools
+              {t("Features & Tools")}
             </div>
           )}
 
           {navLinks.map((link) => {
             const isActive = pathname === link.href;
-            const Icon = link.icon;
             const isDesktopIconOnly = isCollapsed && !isMobileOpen;
 
             return (
@@ -248,8 +247,8 @@ export function Sidebar() {
               type="button"
               onClick={toggleCollapse}
               className="w-full flex h-8 items-center justify-center rounded-lg text-[var(--color-text-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-surface-elevated)] transition cursor-pointer"
-              title="Expand sidebar (260px)"
-              aria-label="Expand sidebar"
+              title={t("Expand sidebar")}
+              aria-label={t("Expand sidebar")}
             >
               <PanelLeftOpen className="h-4 w-4 text-[var(--color-primary)]" />
             </button>
@@ -258,13 +257,13 @@ export function Sidebar() {
             <div className="flex items-center justify-between gap-2 px-1 py-1 text-[10px] text-[var(--color-text-secondary)]">
               <div className="flex items-center gap-1.5 truncate">
                 <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse flex-shrink-0" />
-                <span className="font-semibold text-[var(--color-text)] truncate">System Ready</span>
+                <span className="font-semibold text-[var(--color-text)] truncate">{t("System Ready")}</span>
               </div>
               <button
                 type="button"
                 onClick={toggleCollapse}
                 className="hidden lg:flex items-center gap-1 text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition cursor-pointer"
-                title="Collapse sidebar"
+                title={t("Collapse sidebar")}
               >
                 <PanelLeftClose className="h-3.5 w-3.5" />
               </button>

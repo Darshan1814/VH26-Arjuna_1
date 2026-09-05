@@ -100,7 +100,7 @@ export function AppHeader() {
               {pageTitle}
             </h1>
             <span className="hidden sm:inline text-[10px] text-[var(--color-text-muted)] font-medium truncate">
-              Industrial AI Diagnostic Platform
+              {t("Industrial AI Diagnostic Platform")}
             </span>
           </div>
         </div>
@@ -111,7 +111,7 @@ export function AppHeader() {
         {/* System Online Badge (desktop) */}
         <div className="hidden xl:flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
           <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-          <span>Diagnostic System Online</span>
+          <span>{t("Diagnostic System Online")}</span>
         </div>
 
         {/* Language selector */}
@@ -124,8 +124,8 @@ export function AppHeader() {
           type="button"
           onClick={toggleTheme}
           className="flex h-9 w-9 items-center justify-center rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] text-[var(--color-text-secondary)] hover:text-[var(--color-text)] hover:border-[var(--color-primary)] transition cursor-pointer flex-shrink-0"
-          title="Toggle dark/light theme"
-          aria-label="Toggle theme"
+          title={t("Toggle dark/light theme")}
+          aria-label={t("Toggle theme")}
         >
           {resolvedTheme === "dark" ? (
             <Sun className="h-4 w-4 text-amber-500" />

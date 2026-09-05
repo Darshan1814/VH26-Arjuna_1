@@ -191,7 +191,7 @@ async def call_rapidapi_google_translate_json(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=6.0) as client:
+        async with httpx.AsyncClient(timeout=1.5) as client:
             resp = await client.post(url, headers=headers, json=payload)
             if resp.status_code == 200:
                 data = resp.json()
@@ -230,7 +230,7 @@ async def call_rapidapi_google_translate_text(
     }
 
     try:
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        async with httpx.AsyncClient(timeout=1.5) as client:
             resp = await client.post(url, headers=headers, json=payload)
             if resp.status_code == 200:
                 data = resp.json()
@@ -260,7 +260,7 @@ def translate_with_groq_batch(texts: List[str], source: str, target: str) -> Lis
             f"2. Return a valid JSON object mapping each index key ('0', '1', ...) directly to its translated string.\n\n"
             f"Input:\n{json.dumps(indexed_input, ensure_ascii=False)}"
         )
-        res = client.json_completion([{"role": "user", "content": prompt}])
+        res = client.json_completion([{"role": "user", "content": prompt}], model="openai/gpt-oss-20b")
         if isinstance(res, dict):
             data = res.get("translations", res) if isinstance(res.get("translations"), dict) else res
             translated_list = []

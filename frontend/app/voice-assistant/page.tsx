@@ -377,13 +377,13 @@ export default function VoiceAssistantPage() {
             <div className="space-y-1.5">
               <div className="inline-flex items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400 border border-emerald-500/20">
                 <Radio className="h-3.5 w-3.5 animate-pulse" />
-                Live Multilingual Voice AI
+                {t("Live Multilingual Voice AI")}
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--color-text)]">
-                Industrial Voice Troubleshooter
+                {t("Industrial Voice Troubleshooter")}
               </h1>
               <p className="text-sm text-[var(--color-text-secondary)]">
-                Speak directly in Marathi (मराठी), Hindi (हिंदी), or English. No document upload required to start, or attach an OEM manual for grounded telemetry.
+                {t("Speak directly in Marathi (मराठी), Hindi (हिंदी), or English. No document upload required to start, or attach an OEM manual for grounded telemetry.")}
               </p>
             </div>
 
@@ -441,7 +441,7 @@ export default function VoiceAssistantPage() {
                   <span className="w-1.5 h-3 bg-emerald-600 rounded-full animate-pulse" />
                 </div>
                 <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
-                  Voice Model Playing ({selectedLang === "mr" ? "मराठी आवाज" : selectedLang === "hi" ? "हिंदी आवाज़" : "English Speech"})
+                  {t("Voice Model Playing")} ({selectedLang === "mr" ? "मराठी आवाज" : selectedLang === "hi" ? "हिंदी आवाज़" : "English Speech"})
                 </span>
               </div>
               <button
@@ -449,7 +449,7 @@ export default function VoiceAssistantPage() {
                 className="px-3 py-1 rounded-lg bg-emerald-200 dark:bg-emerald-800 text-emerald-900 dark:text-emerald-100 text-xs font-bold hover:bg-emerald-300 transition flex items-center gap-1"
               >
                 <VolumeX className="h-3.5 w-3.5" />
-                <span>Stop Audio</span>
+                <span>{t("Stop Audio")}</span>
               </button>
             </div>
           )}
@@ -474,7 +474,7 @@ export default function VoiceAssistantPage() {
                 className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] text-xs font-medium text-[var(--color-text)] hover:border-[var(--color-primary)] transition"
               >
                 <Upload className="h-3.5 w-3.5 text-[var(--color-primary)]" />
-                <span>{uploadedFile ? uploadedFile.name : "Optional: Upload Machine Manual (PDF)"}</span>
+                <span>{uploadedFile ? uploadedFile.name : t("Optional: Upload Machine Manual (PDF)")}</span>
               </button>
 
               {uploadedFile && (
@@ -491,8 +491,8 @@ export default function VoiceAssistantPage() {
 
             <span className="text-xs text-[var(--color-text-muted)]">
               {uploadedFile
-                ? "Grounded in manual context"
-                : "Zero-upload conversational mode active"}
+                ? t("Grounded in manual context")
+                : t("Zero-upload conversational mode active")}
             </span>
           </div>
         </div>
@@ -582,10 +582,10 @@ export default function VoiceAssistantPage() {
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)] flex items-center gap-1.5">
               <Sparkles className="h-3.5 w-3.5 text-[var(--color-primary)]" />
-              1-Click Voice Test Prompts:
+              {t("1-Click Voice Test Prompts:")}
             </span>
             <span className="text-[11px] text-[var(--color-text-muted)]">
-              Click any chip to test instant speech & audio output
+              {t("Click any chip to test instant speech & audio output")}
             </span>
           </div>
           <div className="flex flex-wrap gap-2">
@@ -617,7 +617,7 @@ export default function VoiceAssistantPage() {
                 {msg.sender === "user" ? (
                   <div className="max-w-3xl rounded-2xl bg-[var(--color-primary)] text-white p-4 shadow-xs space-y-1">
                     <div className="flex items-center justify-between gap-4 text-white/70 text-[11px]">
-                      <span className="font-semibold">Operator Voice Query</span>
+                      <span className="font-semibold">{t("Operator Voice Query")}</span>
                       <span suppressHydrationWarning>{msg.timestamp}</span>
                     </div>
                     <p className="text-sm font-medium leading-relaxed">{msg.text}</p>
@@ -632,7 +632,7 @@ export default function VoiceAssistantPage() {
                         </div>
                         <div>
                           <h4 className="text-xs font-bold text-[var(--color-text)]">
-                            AI Diagnostic Voice Model
+                            {t("AI Diagnostic Voice Model")}
                           </h4>
                           <span className="text-[10px] text-[var(--color-text-muted)] font-mono uppercase">
                             Lang: {msg.language || "mr"} • Neural Speech AI
@@ -664,12 +664,12 @@ export default function VoiceAssistantPage() {
                           {isSpeaking && speakingMessageId === msg.id ? (
                             <>
                               <VolumeX className="h-3.5 w-3.5 text-white" />
-                              <span>Stop Voice</span>
+                              <span>{t("Stop Voice")}</span>
                             </>
                           ) : (
                             <>
                               <Volume2 className="h-3.5 w-3.5 text-[var(--color-primary)]" />
-                              <span>Listen Voice</span>
+                              <span>{t("Listen Voice")}</span>
                             </>
                           )}
                         </button>
@@ -706,7 +706,7 @@ export default function VoiceAssistantPage() {
                     {msg.actionSteps && msg.actionSteps.length > 0 && (
                       <div className="space-y-2">
                         <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-secondary)]">
-                          Actionable Resolution Steps:
+                          {t("Actionable Resolution Steps:")}
                         </h4>
                         <div className="grid grid-cols-1 gap-2">
                           {msg.actionSteps.map((step, idx) => (
@@ -729,7 +729,7 @@ export default function VoiceAssistantPage() {
                       <div className="pt-2 border-t border-[var(--color-border)] space-y-2">
                         <span className="text-[11px] font-bold uppercase tracking-wider text-[var(--color-text-muted)] flex items-center gap-1">
                           <Globe className="h-3 w-3 text-blue-500" />
-                          Verified OEM Proof Links:
+                          {t("Verified OEM Proof Links:")}
                         </span>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {msg.proofLinks.map((pl, pIdx) => (
@@ -757,7 +757,7 @@ export default function VoiceAssistantPage() {
                 <div className="rounded-2xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] p-4 flex items-center gap-3 shadow-sm">
                   <Loader2 className="h-4 w-4 animate-spin text-[var(--color-primary)]" />
                   <span className="text-xs font-semibold text-[var(--color-text)]">
-                    Reasoning in {selectedLang === "mr" ? "मराठी" : selectedLang === "hi" ? "हिंदी" : "English"} & verifying telemetry...
+                    {t("Analyzing technical documentation, logs & manuals...")}
                   </span>
                 </div>
               </div>
@@ -784,7 +784,7 @@ export default function VoiceAssistantPage() {
                   ? "येथे टाइप करा किंवा वरील माइक बटण वापरून मराठीत बोला..."
                   : selectedLang === "hi"
                   ? "यहाँ टाइप करें या ऊपर माइक बटन से हिंदी में बोलें..."
-                  : "Type your query here or tap the mic above to speak..."
+                  : t("Type your query here or tap the mic above to speak...")
               }
               className="flex-1 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5 text-xs text-[var(--color-text)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)]"
             />
@@ -805,7 +805,7 @@ export default function VoiceAssistantPage() {
               disabled={isProcessing || !inputQuery.trim()}
               className="rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white px-4 py-2.5 text-xs font-semibold transition disabled:opacity-50 cursor-pointer shadow-xs"
             >
-              Send
+              {t("Send")}
             </button>
           </form>
         </div>

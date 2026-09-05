@@ -177,13 +177,13 @@ export default function DocumentIntelligencePage() {
           <div className="space-y-2 max-w-3xl">
             <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 bg-[var(--color-primary)]/10 text-[var(--color-primary)] text-xs font-semibold">
               <Sparkles className="h-3.5 w-3.5" />
-              <span>Document Intelligence & Video Learning Engine</span>
+              <span>{t("Document Intelligence & Video Learning Engine")}</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--color-text)]">
-              Document Breakdown & Video Guide Generator
+              {t("Document Breakdown & Video Guide Generator")}
             </h1>
             <p className="text-sm sm:text-base text-[var(--color-text-secondary)] leading-relaxed">
-              Upload any machine manual, schematic, or service bulletin. The system extracts core architecture, explains what the document actually covers, generates an actionable maintenance roadmap, and produces YouTube video tutorials and OEM reference cards via live search.
+              {t("Upload any machine manual, schematic, or service bulletin. The system extracts core architecture, explains what the document actually covers, generates an actionable maintenance roadmap, and produces YouTube video tutorials and OEM reference cards via live search.")}
             </p>
           </div>
 
@@ -198,7 +198,7 @@ export default function DocumentIntelligencePage() {
               ) : (
                 <Download className="h-4 w-4" />
               )}
-              <span>Download B&W Intelligence Report</span>
+              <span>{t("Download B&W Intelligence Report")}</span>
             </button>
           )}
         </div>
@@ -246,10 +246,10 @@ export default function DocumentIntelligencePage() {
                   </div>
                   <div>
                     <p className="text-sm font-semibold text-[var(--color-text)]">
-                      Drop technical manual (PDF, TXT, DOCX) here
+                      {t("Drop technical manual (PDF, TXT, DOCX) here")}
                     </p>
                     <p className="text-xs text-[var(--color-text-muted)]">
-                      Supports equipment user guides, wiring diagrams, and parts catalogs
+                      {t("Supports equipment user guides, wiring diagrams, and parts catalogs")}
                     </p>
                   </div>
                 </div>
@@ -260,7 +260,7 @@ export default function DocumentIntelligencePage() {
             <div className="flex flex-col justify-between space-y-3">
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold uppercase tracking-wider text-[var(--color-text-secondary)]">
-                  Optional: Focus Area or Symptoms Observed
+                  {t("Optional: Focus Area or Symptoms Observed")}
                 </label>
                 <textarea
                   value={userNotes}
@@ -279,12 +279,12 @@ export default function DocumentIntelligencePage() {
                 {isLoading ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                    <span>Parsing Document & Querying Media Guides...</span>
+                    <span>{t("Parsing Document & Querying Media Guides...")}</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4" />
-                    <span>Analyze Document & Generate Guides</span>
+                    <span>{t("Analyze Document & Generate Guides")}</span>
                   </>
                 )}
               </button>
@@ -349,7 +349,7 @@ export default function DocumentIntelligencePage() {
             <div className="flex items-center gap-2.5 border-b border-[var(--color-border-subtle)] pb-4 text-[var(--color-primary)]">
               <BookOpen className="h-5 w-5" />
               <h2 className="text-base font-bold text-[var(--color-text)]">
-                Document Breakdown: What This Manual Actually Covers
+                {t("Document Breakdown: What This Manual Actually Covers")}
               </h2>
             </div>
             <p className="text-sm sm:text-base text-[var(--color-text-secondary)] leading-relaxed whitespace-pre-line">
@@ -365,10 +365,10 @@ export default function DocumentIntelligencePage() {
                 <ListOrdered className="h-5 w-5" />
                 <div>
                   <h2 className="text-base font-bold text-[var(--color-text)]">
-                    What To Do: Actionable Maintenance & Diagnostic Protocol
+                    {t("What To Do: Actionable Maintenance & Diagnostic Protocol")}
                   </h2>
                   <p className="text-xs text-[var(--color-text-muted)]">
-                    Synthesized direct operational instructions for technicians
+                    {t("Synthesized direct operational instructions for technicians", "Synthesized direct operational instructions for technicians")}
                   </p>
                 </div>
               </div>
@@ -380,7 +380,7 @@ export default function DocumentIntelligencePage() {
               {result.key_action_items?.length > 0 && (
                 <div className="pt-4 space-y-2.5">
                   <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--color-text-muted)]">
-                    Mandatory Action Items
+                    {t("Mandatory Action Items")}
                   </h4>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {result.key_action_items.map((item, idx) => (
@@ -403,7 +403,7 @@ export default function DocumentIntelligencePage() {
                 <div className="flex items-center gap-2 text-red-700">
                   <AlertTriangle className="h-5 w-5" />
                   <h3 className="text-sm font-bold uppercase tracking-wider">
-                    Safety & Precautions
+                    {t("Safety & Precautions")}
                   </h3>
                 </div>
                 <div className="space-y-3">
@@ -433,7 +433,7 @@ export default function DocumentIntelligencePage() {
                 </div>
                 <div>
                   <h2 className="text-base font-bold text-[var(--color-text)]">
-                    Recommended YouTube Video Walkthroughs
+                    {t("Recommended YouTube Video Walkthroughs")}
                   </h2>
                   <p className="text-xs text-[var(--color-text-muted)]">
                     Curated video cards targeting {result.machine_model}
@@ -501,7 +501,7 @@ export default function DocumentIntelligencePage() {
               </div>
               <div>
                 <h2 className="text-base font-bold text-[var(--color-text)]">
-                  OEM Service Manuals & Reference Cards
+                  {t("OEM Service Manuals & Reference Cards")}
                 </h2>
                 <p className="text-xs text-[var(--color-text-muted)]">
                   Cross-referenced engineering documentation & service bulletins
@@ -560,10 +560,10 @@ export default function DocumentIntelligencePage() {
           </div>
           <div className="space-y-1">
             <h3 className="text-base font-semibold text-[var(--color-text)]">
-              No Document Uploaded Yet
+              {t("No Document Uploaded Yet")}
             </h3>
             <p className="text-xs text-[var(--color-text-muted)] max-w-md mx-auto">
-              Select or drop an industrial PDF manual above. The system will generate an executive breakdown, actionable maintenance steps, and YouTube video guides.
+              {t("Select or drop an industrial PDF manual above. The system will generate an executive breakdown, actionable maintenance steps, and YouTube video guides.")}
             </p>
           </div>
         </div>

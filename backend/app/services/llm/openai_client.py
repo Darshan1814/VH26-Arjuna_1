@@ -74,9 +74,9 @@ class OpenAIClient:
     ) -> str:
         """Execute a chat completion with model fallback, optimized for Groq and OpenAI."""
         if settings.GROQ_API_KEY:
-            preferred = model or settings.GROQ_REASONING_MODEL or settings.GROQ_MODEL or "openai/gpt-oss-120b"
+            preferred = model or settings.GROQ_MODEL or "openai/gpt-oss-20b"
             candidate_models = []
-            for m in [preferred, "openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.8-27b", "llama-3.3-70b-versatile", "llama-3.1-8b-instant"]:
+            for m in [preferred, "openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "qwen/qwen3.6-27b", "groq/compound-mini"]:
                 if m and m not in candidate_models:
                     candidate_models.append(m)
         else:

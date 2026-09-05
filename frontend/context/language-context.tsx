@@ -8,6 +8,7 @@ import React, {
   useCallback,
   useRef,
 } from "react";
+import { usePathname } from "next/navigation";
 
 export interface LanguageOption {
   code: string;
@@ -65,7 +66,7 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
   { code: "hu", name: "Hungarian", nativeName: "Magyar", flag: "🇭🇺", countryCode: "hu", region: "Global" },
   { code: "ro", name: "Romanian", nativeName: "Română", flag: "🇷🇴", countryCode: "ro", region: "Global" },
   { code: "uk", name: "Ukrainian", nativeName: "Українська", flag: "🇺🇦", countryCode: "ua", region: "Global" },
-  { code: "he", name: "Hebrew", nativeName: "עבריत", flag: "🇮🇱", countryCode: "il", region: "Global" },
+  { code: "he", name: "Hebrew", nativeName: "עברית", flag: "🇮🇱", countryCode: "il", region: "Global" },
   { code: "fa", name: "Persian", nativeName: "فارسی", flag: "🇮🇷", countryCode: "ir", region: "Global" },
   { code: "ms", name: "Malay", nativeName: "Bahasa Melayu", flag: "🇲🇾", countryCode: "my", region: "Global" },
   { code: "tl", name: "Filipino", nativeName: "Filipino", flag: "🇵🇭", countryCode: "ph", region: "Global" },
@@ -96,19 +97,88 @@ export const SUPPORTED_LANGUAGES: LanguageOption[] = [
 ];
 
 const INITIAL_CORE_STRINGS = [
+  // --- Navigation & Core App Shell ---
   "Machine Troubleshooter",
   "Chatbot",
   "Process Flow",
-  "Industrial Diagnostic Assistant",
-  "Active Knowledge Base",
-  "None (Upload document to begin)",
-  "Cancel / Change",
-  "Upload Equipment Documentation",
-  "Upload an OEM manual, circuit diagram, or error log (PDF, PNG, CSV). Grounded diagnostic suggestions will be dynamically generated once indexed.",
-  "Select & Upload Manual",
-  "Use Ingested PhaseMaker RC Manual",
-  "Supports: PDF, DOCX, PNG, JPG, CSV, LOG, TXT with multilingual extraction.",
+  "What-If Simulator",
+  "Image Analysis",
+  "Voice Assistant",
+  "Document Intelligence",
+  "Doc & Video Intelligence",
+  "Error Research",
+  "Arjuna Sarthi",
+  "Features & Tools",
+  "Interactive troubleshooting",
+  "AI Web Intelligence Extension",
+  "Failure mode simulation",
+  "OCR & visual error solving",
+  "Multilingual voice AI (मराठी, हिंदी, English)",
+  "IEEE papers & OEM service bulletins",
+  "Doc roadmap & YouTube video cards",
+  "Observable 8-stage pipeline",
+  "Troubleshooter",
+  "Industrial AI",
+  "Industrial AI Diagnostic Platform",
+  "Diagnostic System Online",
+  "System Ready",
+  "Collapse sidebar",
+  "Expand sidebar",
+  "Select Language",
+  "Select Language (70 Available)",
+  "Search 70 languages...",
+  "No matching language found",
+  "Translating...",
+  "Language",
+  "Indian Languages",
+  "Global Languages",
+  "Toggle dark/light theme",
+  "Open navigation menu",
   "Clear conversation",
+  "Clear",
+  "Cancel",
+  "Cancel / Change",
+  "Run",
+  "Step",
+  "of 8",
+  "Previous",
+  "Next",
+  "Next Step",
+  "Re-run Step",
+  "Executing Step",
+  "Simulate",
+  "Print",
+  "Download PDF",
+  "Download PDF Report",
+  "View HTML Report",
+  "View Interactive HTML Report",
+  "Full Screen",
+  "Report Unavailable",
+  "Loading diagnostic report",
+  "REPORT",
+  "Diagnostic Report Preview",
+  "Industrial Diagnostic Documentation",
+  "Active Knowledge Base",
+  "Universal OEM Diagnostic Engine",
+  "Upload Manual",
+  "Select & Upload Manual",
+  "Upload Equipment Documentation",
+  "Upload Service Manual or Schematic",
+  "Upload Manual (Optional)",
+  "Upload Service Manual",
+  "Upload Another Manual",
+  "Total Documents",
+  "Detected Language",
+  "Pipeline State",
+  "Ingested & Verified",
+  "Select File",
+
+  // --- Chat Page ---
+  "Industrial Diagnostic Assistant",
+  "Industrial Machine Troubleshooting",
+  "Industrial diagnostic reasoning engine with verified search citations. Inquire about any machine fault, alarm code, or physical symptom directly — or optionally upload an equipment manual to ground citations.",
+  "Active Grounding Manual",
+  "Quick Diagnostic Inquiries",
   "Describe the machine fault, alarm, or ask questions from uploaded manuals...",
   "Describe the machine issue or enter an error code...",
   "Listening... Your voice will transcribe here.",
@@ -126,9 +196,6 @@ const INITIAL_CORE_STRINGS = [
   "Ranked by Evidence Strength",
   "Yellow-Highlighted Source Manual Evidence",
   "Source Citations",
-  "Download PDF Report",
-  "View HTML Report",
-  "View Interactive HTML Report",
   "HIGH Confidence",
   "MEDIUM Confidence",
   "LOW Confidence",
@@ -139,7 +206,141 @@ const INITIAL_CORE_STRINGS = [
   "What does error E101 mean?",
   "Why is my CNC-X100 overheating?",
   "What does E101 mean on PRESS-Z200?",
-  "Industrial Machine Troubleshooting",
+
+  // --- What-If Simulator ---
+  "Industrial \"What-If\" Failure Simulator",
+  "Industrial “What-If” Failure Simulator",
+  "AI Failure Mode & Effects Analysis (FMEA)",
+  "Upload any equipment diagram, manual page (PDF/TXT), or panel photo. The system generates 10 high-impact failure scenarios, or test custom hypothetical faults with grounded OEM proof links.",
+  "1. Input Equipment or Manual",
+  "Machine Model / Equipment Type",
+  "Upload image, manual page, or schematic",
+  "PNG, JPG, PDF, or TXT formats supported",
+  "Click to switch file",
+  "Or paste specifications / technical excerpt:",
+  "Paste operating parameters, pressure limits, or schematic notes...",
+  "Generate 10 What-If Questions",
+  "Extracting & Generating 10 Scenarios...",
+  "Type Your Own Scenario (Direct Simulation)",
+  "10 Failure Scenarios Generated",
+  "Regenerate 10 Questions",
+  "No questions generated yet",
+  "Selected Failure Scenario:",
+  "← Show All 10 Questions",
+  "Simulate Scenario",
+  "Simulating Physical Failure Dynamics & Sourcing OEM Bulletins...",
+  "Simulation Verified",
+  "Mandatory Safety & LOTO Protocol",
+  "Engineering Diagnosis & Physical Cascade",
+  "Root Causes & Triggers",
+  "Step-by-Step Resolution Roadmap",
+  "Ranked Engineering Solutions",
+  "Live OEM Technical Bulletins & Proof References (Live Verified)",
+  "Critical Risk",
+  "High Impact",
+  "Medium Impact",
+
+  // --- Image Analysis ---
+  "Vision & Optical Character Recognition (OCR)",
+  "Image Analysis & Error Solving",
+  "Upload machine alarm screen photos, indicator panels, digital gauge readouts, or damaged components. High-precision OCR extracts alphanumeric fault codes, and the system synthesizes comprehensive troubleshooting guidance backed by verified web proof links.",
+  "1. Upload Machine Image",
+  "Drop or click to upload photo",
+  "Panel screens, error codes, LED alarms, gauges (PNG, JPG, WebP)",
+  "Machine / Brand Hint (Optional)",
+  "Observed Physical Symptoms (Optional)",
+  "Analyze Image & Solve Fault",
+  "Processing OCR & Diagnosing Error...",
+  "Ready for Optical Character Recognition & Diagnosis",
+  "Running Tesseract OCR & Sourcing OEM Service Bulletins...",
+  "OCR & AI Verified",
+  "OCR Extracted Text from Image",
+  "Mandatory Lockout/Tagout (LOTO) & Electrical Safety",
+  "Diagnostic Finding & Physical Root Mechanism",
+  "Likely Causes",
+  "Step-by-Step Resolution",
+  "Ranked Countermeasures",
+  "Live OEM Service Bulletins & Verified Proof Links",
+
+  // --- Voice Assistant ---
+  "Live Multilingual Voice AI",
+  "Industrial Voice Troubleshooter",
+  "Speak directly in Marathi (मराठी), Hindi (हिंदी), or English. No document upload required to start, or attach an OEM manual for grounded telemetry.",
+  "Voice Model Playing",
+  "Stop Audio",
+  "Listen Voice",
+  "Optional: Upload Machine Manual (PDF)",
+  "Grounded in manual context",
+  "Zero-upload conversational mode active",
+  "Tap mic to start hands-free voice diagnostic",
+  "1-Click Voice Test Prompts:",
+  "Operator Voice Query",
+  "AI Diagnostic Voice Model",
+  "Actionable Resolution Steps:",
+  "Verified OEM Proof Links:",
+  "Type your query here or tap the mic above to speak...",
+
+  // --- Document Intelligence ---
+  "Document Intelligence & Video Learning Engine",
+  "Document Breakdown & Video Guide Generator",
+  "Upload any machine manual, schematic, or service bulletin. The system extracts core architecture, explains what the document actually covers, generates an actionable maintenance roadmap, and produces YouTube video tutorials and OEM reference cards via live search.",
+  "Download B&W Intelligence Report",
+  "Drop technical manual (PDF, TXT, DOCX) here",
+  "Supports equipment user guides, wiring diagrams, and parts catalogs",
+  "Optional: Focus Area or Symptoms Observed",
+  "Analyze Document & Generate Guides",
+  "Parsing Document & Querying Media Guides...",
+  "Document Breakdown: What This Manual Actually Covers",
+  "What To Do: Actionable Maintenance & Diagnostic Protocol",
+  "Mandatory Action Items",
+  "Safety & Precautions",
+  "Recommended YouTube Video Walkthroughs",
+  "OEM Service Manuals & Reference Cards",
+  "No Document Uploaded Yet",
+
+  // --- Error Research ---
+  "OEM Bulletins & IEEE/ScienceDirect Research Engine",
+  "Industrial Error & Failure Research",
+  "Investigate any machine fault, alarm code, or physical degradation mode. Our engine surfaces peer-reviewed research papers, OEM technical service bulletins, and manufacturer application notes via verified search with forensic engineering synthesis.",
+  "Download B&W Research Report",
+  "Enter error code, machine symptom, or failure mode (e.g., Siemens V20 F001 Overcurrent)...",
+  "Machine context (optional)",
+  "Analyze Error",
+  "Quick Inquiries:",
+  "Executive Engineering Briefing",
+  "Industry Consensus Standard",
+  "Forensic Mechanism & Physics of Failure",
+  "All Citations",
+  "Research Papers",
+  "OEM Bulletins",
+  "Technical Documentation",
+  "Read Publication",
+  "Open OEM Bulletin",
+  "View Manual",
+  "No Error Searched Yet",
+
+  // --- Arjuna Sarthi ---
+  "Browser Extension • Chrome Manifest V3",
+  "Your AI companion for understanding the web.",
+  "Extract, synthesize, and interrogate any active webpage or document with grounded neural intelligence, precision retrieval, and zero hallucination.",
+  "Download Extension (dist.zip)",
+  "In-Page Simulator",
+  "Installation Steps",
+  "4-Layer Celestial Orbit Architecture",
+  "Prithvi Core",
+  "Gandiva Bow",
+  "Tejas Shield",
+  "Brahmastra Brain",
+  "Live Reasoning Playground",
+  "Chrome / Chromium Installation Guide",
+  "AI Factual Response",
+  "Page Grounding Citations",
+  "Load Unpacked",
+  "Enable Developer Mode",
+  "Open Extensions",
+  "Download or Build",
+
+  // --- Process Flow Steps & Telemetry ---
   "Document Intake & Language Detection",
   "Multimodal Document Extraction & OCR",
   "Equipment & Technical Structure Extraction",
@@ -156,45 +357,18 @@ const INITIAL_CORE_STRINGS = [
   "Auto-Run (8 Steps)",
   "Pause Auto-Run",
   "Restart to Step 1",
-  "Run Step",
-  "Next: Step",
-  "Executing Step",
-  "Step",
-  "of 8",
-  "Previous",
   "Live Stage Telemetry",
   "Live Pipeline Telemetry",
   "Verified Output",
-  "Report ID",
-  "REPORT",
-  "Diagnostic Report Preview",
-  "Industrial Diagnostic Documentation",
-  "Print",
-  "Download PDF",
-  "Full Screen",
-  "Report Unavailable",
-  "Select Language (70 Available)",
-  "Search 70 languages...",
-  "No matching language found",
-  "Translating...",
-  "Language",
-  "Select Language",
-  "The pipeline enforces strict evidence-based answers. If retrieved evidence is insufficient, the system will not hallucinate — it will clearly state that it lacks information.",
-  "Active document cancelled. Please upload a new manual.",
-  "Total Documents",
-  "Detected Language",
-  "Pipeline State",
-  "Ingested & Verified",
-  "Upload Service Manual or Schematic",
-  "Supports PDF manuals, OCR images, CSV tables, and error logs",
-  "Select File",
-  "Re-run Step",
-  "Next Step",
-  "Verify & Process Diagnostic Query",
+  "Session",
+  "INITIALIZING",
+  "Advanced Diagnostic Engine",
+  "Industrial Diagnostic Process Flow",
+  "Step-by-step observable RAG architecture executing live backend telemetry with zero simulated outputs",
   "Equipment Troubleshooting Query:",
   "Derived from Manual:",
+  "Derived from Uploaded Manual:",
   "Uploaded Equipment Documents",
-  "+ Upload Another Manual",
   "Pages Processed",
   "Tables Extracted",
   "Diagrams Detected",
@@ -210,7 +384,16 @@ const INITIAL_CORE_STRINGS = [
   "Vector Dimension",
   "Embedding Model",
   "Indexed Semantic Chunk Excerpts:",
-  "Dense"
+  "Dense",
+  "Verify & Process Diagnostic Query",
+  "Verifying & Processing Diagnostic Query...",
+  "Stored in SQLite",
+  "Technical Document Profile:",
+  "Equipment Name:",
+  "Document Type:",
+  "Scope:",
+  "Model Range:",
+  "Electrical Spec:",
 ];
 
 interface LanguageContextType {
@@ -234,6 +417,7 @@ interface ExtTextNode extends Text {
 const nodeEnglishMap = new WeakMap<Node, string>();
 
 export function LanguageProvider({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname();
   const [currentLanguage, setCurrentLanguageState] = useState<string>("en");
   const [translations, setTranslations] = useState<Record<string, string>>({});
   const [isTranslating, setIsTranslating] = useState<boolean>(false);
@@ -374,7 +558,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
         const newUpdates: Record<string, string> = {};
         missing.forEach((str, idx) => {
           const trans = translatedArray[idx];
-          // Only accept and cache if genuinely translated
           if (trans && trans.trim() && trans.trim() !== str.trim()) {
             newUpdates[str] = trans;
             cachedMap[str] = trans;
@@ -421,7 +604,6 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
     if (code === "en") {
       setTranslations({});
-      // Synchronously restore all English immediately without waiting for any async ticks
       restoreAllEnglish();
       return;
     }
@@ -515,10 +697,14 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
   // =========================================================================
   // AUTOMATIC FULL-WEBPAGE DOM TEXT-NODE TRANSLATOR
   // =========================================================================
-  useEffect(() => {
+  const translateDomNodes = useCallback(() => {
     if (typeof window === "undefined") return;
 
-    // Helper: Is element excluded from translation?
+    if (currentLanguage === "en") {
+      restoreAllEnglish();
+      return;
+    }
+
     const isExcluded = (el: HTMLElement | null): boolean => {
       if (!el) return false;
       const tag = el.tagName?.toLowerCase();
@@ -542,111 +728,106 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
       return /[a-zA-Z\u00C0-\uFFFF]/.test(text);
     };
 
-    // Traverse and translate all visible text nodes in the DOM
-    const translateDomNodes = () => {
-      if (currentLanguage === "en") {
-        restoreAllEnglish();
-        return;
+    const walker = document.createTreeWalker(
+      document.body,
+      NodeFilter.SHOW_TEXT,
+      {
+        acceptNode(node) {
+          const parent = node.parentElement;
+          if (!parent || isExcluded(parent)) return NodeFilter.FILTER_REJECT;
+          const extNode = node as ExtTextNode;
+          if (extNode.__origEnglish || nodeEnglishMap.has(extNode)) return NodeFilter.FILTER_ACCEPT;
+          const val = node.nodeValue?.trim();
+          if (!val || val.length < 2) return NodeFilter.FILTER_SKIP;
+          if (!hasLanguageLetters(val)) return NodeFilter.FILTER_SKIP;
+          return NodeFilter.FILTER_ACCEPT;
+        },
+      }
+    );
+
+    let node: Node | null;
+    while ((node = walker.nextNode())) {
+      const extNode = node as ExtTextNode;
+      const currentVal = extNode.nodeValue || "";
+
+      // First encounter of this node: store original English
+      if (!extNode.__origEnglish && !nodeEnglishMap.has(extNode)) {
+        const trimmed = currentVal.trim();
+        const knownEnglish = reverseMapRef.current[trimmed];
+        const initialEnglish = knownEnglish ? currentVal.replace(trimmed, knownEnglish) : currentVal;
+        extNode.__origEnglish = initialEnglish;
+        nodeEnglishMap.set(extNode, initialEnglish);
       }
 
-      const walker = document.createTreeWalker(
-        document.body,
-        NodeFilter.SHOW_TEXT,
-        {
-          acceptNode(node) {
-            const parent = node.parentElement;
-            if (!parent || isExcluded(parent)) return NodeFilter.FILTER_REJECT;
-            const extNode = node as ExtTextNode;
-            if (extNode.__origEnglish || nodeEnglishMap.has(extNode)) return NodeFilter.FILTER_ACCEPT;
-            const val = node.nodeValue?.trim();
-            if (!val || val.length < 2) return NodeFilter.FILTER_SKIP;
-            if (!hasLanguageLetters(val)) return NodeFilter.FILTER_SKIP;
-            return NodeFilter.FILTER_ACCEPT;
-          },
-        }
-      );
+      const originalText = (extNode.__origEnglish || nodeEnglishMap.get(extNode) || currentVal).trim();
+      if (!originalText) continue;
 
-      let node: Node | null;
-      while ((node = walker.nextNode())) {
-        const extNode = node as ExtTextNode;
-        const currentVal = extNode.nodeValue || "";
+      // Skip if already translated for the currently active language
+      if (extNode.__translatedFor === currentLanguage) continue;
 
-        // First encounter of this node: store original English
-        if (!extNode.__origEnglish && !nodeEnglishMap.has(extNode)) {
-          const trimmed = currentVal.trim();
-          // If node was rendered while foreign language was active, check reverse map
-          const knownEnglish = reverseMapRef.current[trimmed];
-          const initialEnglish = knownEnglish ? currentVal.replace(trimmed, knownEnglish) : currentVal;
-          extNode.__origEnglish = initialEnglish;
-          nodeEnglishMap.set(extNode, initialEnglish);
-        }
+      const translated =
+        translationsRef.current[originalText] ||
+        translationsRef.current[extNode.__origEnglish || ""];
 
-        const originalText = (extNode.__origEnglish || nodeEnglishMap.get(extNode) || currentVal).trim();
-        if (!originalText) continue;
-
-        // Skip if already translated for the currently active language
-        if (extNode.__translatedFor === currentLanguage) continue;
-
-        const translated =
-          translationsRef.current[originalText] ||
-          translationsRef.current[extNode.__origEnglish || ""];
-
-        if (translated && translated.trim() !== originalText) {
-          const template = extNode.__origEnglish || nodeEnglishMap.get(extNode) || currentVal;
-          extNode.nodeValue = template.replace(originalText, translated);
-          extNode.__translatedFor = currentLanguage;
-          reverseMapRef.current[translated.trim()] = originalText;
-        } else {
-          // Queue for background translation
-          queueForTranslation(originalText, currentLanguage);
-        }
+      if (translated && translated.trim() !== originalText) {
+        const template = extNode.__origEnglish || nodeEnglishMap.get(extNode) || currentVal;
+        extNode.nodeValue = template.replace(originalText, translated);
+        extNode.__translatedFor = currentLanguage;
+        reverseMapRef.current[translated.trim()] = originalText;
+      } else {
+        // Queue for background translation
+        queueForTranslation(originalText, currentLanguage);
       }
+    }
 
-      // Translate input & textarea placeholders
-      const inputs = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
-        "input[placeholder], textarea[placeholder]"
-      );
-      inputs.forEach((input) => {
-        if (isExcluded(input)) return;
-        if (!input.dataset.origPlaceholder) {
-          const knownEng = reverseMapRef.current[input.placeholder.trim()];
-          input.dataset.origPlaceholder = knownEng || input.placeholder;
-        }
-        const orig = input.dataset.origPlaceholder.trim();
-        if (!orig || !hasLanguageLetters(orig)) return;
+    // Translate input & textarea placeholders
+    const inputs = document.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>(
+      "input[placeholder], textarea[placeholder]"
+    );
+    inputs.forEach((input) => {
+      if (isExcluded(input)) return;
+      if (!input.dataset.origPlaceholder) {
+        const knownEng = reverseMapRef.current[input.placeholder.trim()];
+        input.dataset.origPlaceholder = knownEng || input.placeholder;
+      }
+      const orig = input.dataset.origPlaceholder.trim();
+      if (!orig || !hasLanguageLetters(orig)) return;
 
-        if (translationsRef.current[orig] && translationsRef.current[orig].trim() !== orig) {
-          input.placeholder = translationsRef.current[orig];
-          reverseMapRef.current[translationsRef.current[orig].trim()] = orig;
-        } else {
-          queueForTranslation(orig, currentLanguage);
-        }
-      });
+      if (translationsRef.current[orig] && translationsRef.current[orig].trim() !== orig) {
+        input.placeholder = translationsRef.current[orig];
+        reverseMapRef.current[translationsRef.current[orig].trim()] = orig;
+      } else {
+        queueForTranslation(orig, currentLanguage);
+      }
+    });
 
-      // Translate element titles (tooltips)
-      const titledElements = document.querySelectorAll<HTMLElement>("[title]");
-      titledElements.forEach((el) => {
-        if (isExcluded(el)) return;
-        if (!el.dataset.origTitle) {
-          const knownEng = reverseMapRef.current[el.title.trim()];
-          el.dataset.origTitle = knownEng || el.title;
-        }
-        const orig = el.dataset.origTitle.trim();
-        if (!orig || !hasLanguageLetters(orig)) return;
+    // Translate element titles (tooltips)
+    const titledElements = document.querySelectorAll<HTMLElement>("[title]");
+    titledElements.forEach((el) => {
+      if (isExcluded(el)) return;
+      if (!el.dataset.origTitle) {
+        const knownEng = reverseMapRef.current[el.title.trim()];
+        el.dataset.origTitle = knownEng || el.title;
+      }
+      const orig = el.dataset.origTitle.trim();
+      if (!orig || !hasLanguageLetters(orig)) return;
 
-        if (translationsRef.current[orig] && translationsRef.current[orig].trim() !== orig) {
-          el.title = translationsRef.current[orig];
-          reverseMapRef.current[translationsRef.current[orig].trim()] = orig;
-        } else {
-          queueForTranslation(orig, currentLanguage);
-        }
-      });
-    };
+      if (translationsRef.current[orig] && translationsRef.current[orig].trim() !== orig) {
+        el.title = translationsRef.current[orig];
+        reverseMapRef.current[translationsRef.current[orig].trim()] = orig;
+      } else {
+        queueForTranslation(orig, currentLanguage);
+      }
+    });
+  }, [currentLanguage, queueForTranslation, restoreAllEnglish]);
 
-    // Execute DOM translation
+  // Main DOM translation observer & execution
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
     translateDomNodes();
 
-    // Observe only added/removed child nodes (NEVER observe characterData)
+    // Observe only added/removed child nodes
     const observer = new MutationObserver((mutations) => {
       let hasAddedNodes = false;
       for (const mut of mutations) {
@@ -669,7 +850,23 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
     return () => {
       observer.disconnect();
     };
-  }, [currentLanguage, translations, queueForTranslation, restoreAllEnglish]);
+  }, [translateDomNodes, translations]);
+
+  // Trigger on route change (Next.js client-side navigation)
+  useEffect(() => {
+    if (typeof window === "undefined" || currentLanguage === "en") return;
+
+    translateDomNodes();
+    const t1 = setTimeout(translateDomNodes, 60);
+    const t2 = setTimeout(translateDomNodes, 250);
+    const t3 = setTimeout(translateDomNodes, 600);
+
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [pathname, currentLanguage, translateDomNodes]);
 
   return (
     <LanguageContext.Provider

@@ -215,14 +215,13 @@ export default function WhatIfSimulatorPage() {
             <div className="space-y-2">
               <div className="inline-flex items-center gap-2 rounded-lg bg-blue-500/10 px-3 py-1 text-xs font-semibold text-blue-600 dark:text-blue-400 border border-blue-500/20">
                 <Sparkles className="h-3.5 w-3.5" />
-                AI Failure Mode & Effects Analysis (FMEA)
+                {t("AI Failure Mode & Effects Analysis (FMEA)")}
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--color-text)]">
-                Industrial &ldquo;What-If&rdquo; Failure Simulator
+                {t("Industrial \"What-If\" Failure Simulator")}
               </h1>
               <p className="text-sm text-[var(--color-text-secondary)] max-w-3xl">
-                Upload any equipment diagram, manual page (PDF/TXT), or panel photo. The system generates 10 high-impact
-                failure scenarios, or test custom hypothetical faults with grounded OEM proof links.
+                {t("Upload any equipment diagram, manual page (PDF/TXT), or panel photo. The system generates 10 high-impact failure scenarios, or test custom hypothetical faults with grounded OEM proof links.")}
               </p>
             </div>
           </div>
@@ -234,13 +233,13 @@ export default function WhatIfSimulatorPage() {
           <div className="lg:col-span-1 space-y-4 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-5 shadow-xs">
             <h2 className="text-sm font-semibold uppercase tracking-wider text-[var(--color-text)] flex items-center gap-2">
               <Upload className="h-4 w-4 text-[var(--color-primary)]" />
-              1. Input Equipment or Manual
+              {t("1. Input Equipment or Manual")}
             </h2>
 
             {/* Machine Name Field */}
             <div>
               <label className="text-xs font-medium text-[var(--color-text-muted)] block mb-1">
-                Machine Model / Equipment Type
+                {t("Machine Model / Equipment Type")}
               </label>
               <input
                 type="text"

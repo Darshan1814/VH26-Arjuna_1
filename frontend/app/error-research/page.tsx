@@ -166,13 +166,13 @@ export default function ErrorResearchPage() {
           <div className="space-y-2 max-w-3xl">
             <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 bg-[var(--color-primary)]/10 text-[var(--color-primary)] text-xs font-semibold">
               <Sparkles className="h-3.5 w-3.5" />
-              <span>OEM Bulletins & IEEE/ScienceDirect Research Engine</span>
+              <span>{t("OEM Bulletins & IEEE/ScienceDirect Research Engine")}</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-[var(--color-text)]">
-              Industrial Error & Failure Research
+              {t("Industrial Error & Failure Research")}
             </h1>
             <p className="text-sm sm:text-base text-[var(--color-text-secondary)] leading-relaxed">
-              Investigate any machine fault, alarm code, or physical degradation mode. Our engine surfaces peer-reviewed research papers, OEM technical service bulletins, and manufacturer application notes via verified search with forensic engineering synthesis.
+              {t("Investigate any machine fault, alarm code, or physical degradation mode. Our engine surfaces peer-reviewed research papers, OEM technical service bulletins, and manufacturer application notes via verified search with forensic engineering synthesis.")}
             </p>
           </div>
 
@@ -187,7 +187,7 @@ export default function ErrorResearchPage() {
               ) : (
                 <Download className="h-4 w-4" />
               )}
-              <span>Download B&W Research Report</span>
+              <span>{t("Download B&W Research Report")}</span>
             </button>
           )}
         </div>
@@ -207,7 +207,7 @@ export default function ErrorResearchPage() {
                 type="text"
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                placeholder="Enter error code, machine symptom, or failure mode (e.g., Siemens V20 F001 Overcurrent)..."
+                placeholder={t("Enter error code, machine symptom, or failure mode (e.g., Siemens V20 F001 Overcurrent)...")}
                 className="w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] pl-11 pr-4 py-3 text-sm text-[var(--color-text)] placeholder-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition"
               />
             </div>
@@ -216,7 +216,7 @@ export default function ErrorResearchPage() {
               type="text"
               value={machineModel}
               onChange={(e) => setMachineModel(e.target.value)}
-              placeholder="Machine context (optional)"
+              placeholder={t("Machine context (optional)")}
               className="w-full sm:w-64 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-4 py-3 text-sm text-[var(--color-text)] placeholder-[var(--color-text-muted)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] transition"
             />
 
@@ -228,12 +228,12 @@ export default function ErrorResearchPage() {
               {isLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin" />
-                  <span>Searching Literature...</span>
+                  <span>{t("Analyzing technical documentation, logs & manuals...")}</span>
                 </>
               ) : (
                 <>
                   <Search className="h-4 w-4" />
-                  <span>Analyze Error</span>
+                  <span>{t("Analyze Error")}</span>
                 </>
               )}
             </button>
@@ -241,7 +241,7 @@ export default function ErrorResearchPage() {
 
           {/* Preset Buttons */}
           <div className="mt-4 flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-[var(--color-text-muted)]">Quick Inquiries:</span>
+            <span className="text-xs font-medium text-[var(--color-text-muted)]">{t("Quick Inquiries:")}</span>
             {PRESET_QUERIES.map((p, idx) => (
               <button
                 key={idx}
@@ -298,7 +298,7 @@ export default function ErrorResearchPage() {
                   </div>
                   <div>
                     <h2 className="text-base font-bold text-[var(--color-text)]">
-                      Executive Engineering Briefing
+                      {t("Executive Engineering Briefing")}
                     </h2>
                     <p className="text-xs text-[var(--color-text-muted)]">
                       Target Equipment: {researchResult.machine_model}
@@ -320,7 +320,7 @@ export default function ErrorResearchPage() {
                 <div className="flex items-center gap-2 text-[var(--color-primary)]">
                   <CheckCircle2 className="h-5 w-5" />
                   <h3 className="text-sm font-bold uppercase tracking-wider text-[var(--color-text)]">
-                    Industry Consensus Standard
+                    {t("Industry Consensus Standard")}
                   </h3>
                 </div>
                 <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
@@ -339,7 +339,7 @@ export default function ErrorResearchPage() {
           <div className="rounded-2xl border border-amber-200/80 bg-gradient-to-r from-amber-50/50 via-[var(--color-surface-elevated)] to-amber-50/30 p-6 space-y-3 shadow-sm">
             <div className="flex items-center gap-2.5 text-amber-800 font-semibold text-sm">
               <Zap className="h-4 w-4 text-amber-600" />
-              <span>Forensic Mechanism & Physics of Failure</span>
+              <span>{t("Forensic Mechanism & Physics of Failure")}</span>
             </div>
             <p className="text-sm text-[var(--color-text-secondary)] leading-relaxed">
               {researchResult.physics_of_failure}
@@ -356,7 +356,7 @@ export default function ErrorResearchPage() {
                   : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]"
               }`}
             >
-              All Citations ({researchResult.total_sources})
+              {t("All Citations")} ({researchResult.total_sources})
             </button>
             <button
               onClick={() => setActiveTab("papers")}
@@ -366,7 +366,7 @@ export default function ErrorResearchPage() {
                   : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]"
               }`}
             >
-              Research Papers ({researchResult.research_papers.length})
+              {t("Research Papers")} ({researchResult.research_papers.length})
             </button>
             <button
               onClick={() => setActiveTab("bulletins")}
@@ -376,7 +376,7 @@ export default function ErrorResearchPage() {
                   : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]"
               }`}
             >
-              OEM Bulletins ({researchResult.oem_bulletins.length})
+              {t("OEM Bulletins")} ({researchResult.oem_bulletins.length})
             </button>
             <button
               onClick={() => setActiveTab("docs")}
@@ -386,7 +386,7 @@ export default function ErrorResearchPage() {
                   : "text-[var(--color-text-secondary)] hover:bg-[var(--color-surface)]"
               }`}
             >
-              Technical Documentation ({researchResult.documentation_links.length})
+              {t("Technical Documentation")} ({researchResult.documentation_links.length})
             </button>
           </div>
 
@@ -420,7 +420,7 @@ export default function ErrorResearchPage() {
 
                   <div className="pt-4 mt-4 border-t border-[var(--color-border-subtle)] flex items-center justify-between">
                     <span className="text-[11px] text-[var(--color-text-muted)] font-medium">
-                      Peer-Reviewed
+                      {t("Peer-Reviewed", "Peer-Reviewed")}
                     </span>
                     <a
                       href={paper.link}
@@ -428,7 +428,7 @@ export default function ErrorResearchPage() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-primary)] hover:underline"
                     >
-                      <span>Read Publication</span>
+                      <span>{t("Read Publication")}</span>
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   </div>
@@ -463,7 +463,7 @@ export default function ErrorResearchPage() {
 
                   <div className="pt-4 mt-4 border-t border-[var(--color-border-subtle)] flex items-center justify-between">
                     <span className="text-[11px] text-[var(--color-text-muted)] font-medium">
-                      Manufacturer Spec
+                      {t("Manufacturer Spec", "Manufacturer Spec")}
                     </span>
                     <a
                       href={bulletin.link}
@@ -471,7 +471,7 @@ export default function ErrorResearchPage() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-primary)] hover:underline"
                     >
-                      <span>Open OEM Bulletin</span>
+                      <span>{t("Open OEM Bulletin")}</span>
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   </div>
@@ -503,7 +503,7 @@ export default function ErrorResearchPage() {
 
                   <div className="pt-4 mt-4 border-t border-[var(--color-border-subtle)] flex items-center justify-between">
                     <span className="text-[11px] text-[var(--color-text-muted)] font-medium">
-                      Support Portal
+                      {t("Support Portal", "Support Portal")}
                     </span>
                     <a
                       href={doc.link}
@@ -511,7 +511,7 @@ export default function ErrorResearchPage() {
                       rel="noopener noreferrer"
                       className="inline-flex items-center gap-1 text-xs font-semibold text-[var(--color-primary)] hover:underline"
                     >
-                      <span>View Manual</span>
+                      <span>{t("View Manual")}</span>
                       <ExternalLink className="h-3.5 w-3.5" />
                     </a>
                   </div>
@@ -529,10 +529,10 @@ export default function ErrorResearchPage() {
           </div>
           <div className="space-y-1">
             <h3 className="text-base font-semibold text-[var(--color-text)]">
-              No Error Searched Yet
+              {t("No Error Searched Yet")}
             </h3>
             <p className="text-xs text-[var(--color-text-muted)] max-w-md mx-auto">
-              Type an error code or machine fault above, or click one of the quick inquiries to pull live IEEE research papers and OEM service bulletins.
+              {t("Type an error code or machine fault above, or click one of the quick inquiries to pull live IEEE research papers and OEM service bulletins.")}
             </p>
           </div>
         </div>

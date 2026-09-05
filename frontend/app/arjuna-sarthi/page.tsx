@@ -28,8 +28,10 @@ import {
 } from "lucide-react";
 import { ArjunaSarthiLogo } from "@/components/branding/arjuna-sarthi-logo";
 import { getApiBase } from "@/lib/api";
+import { useLanguage } from "@/context/language-context";
 
 export default function ArjunaSarthiPage() {
+  const { t } = useLanguage();
   const [backendStatus, setBackendStatus] = useState<{
     status: string;
     model: string;
@@ -159,7 +161,7 @@ export default function ArjunaSarthiPage() {
           {/* Top Pill Badge */}
           <div className="relative z-10 inline-flex items-center gap-2 rounded-full border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3.5 py-1 text-xs font-semibold text-[var(--color-primary)] shadow-2xs mb-4">
             <Sparkles className="h-3.5 w-3.5 text-[var(--color-primary)] animate-pulse" />
-            <span>Browser Extension • Chrome Manifest V3</span>
+            <span>{t("Browser Extension • Chrome Manifest V3")}</span>
           </div>
 
           {/* ========================================================================= */}
@@ -172,24 +174,24 @@ export default function ArjunaSarthiPage() {
           {/* Center Titles */}
           <div className="relative z-10 max-w-2xl space-y-2 mt-4">
             <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-[var(--color-text)]">
-              Arjuna Sarthi{" "}
+              {t("Arjuna Sarthi")}{" "}
               <span className="text-[var(--color-primary)] font-serif font-semibold">
                 (अर्जुन सारथी)
               </span>
             </h1>
 
             <p className="text-sm sm:text-base font-medium text-[var(--color-text-secondary)] font-serif">
-              &ldquo;Your AI companion for understanding the web.&rdquo;
+              &ldquo;{t("Your AI companion for understanding the web.")}&rdquo;
             </p>
 
             <p className="text-xs sm:text-sm text-[var(--color-text-muted)] max-w-xl mx-auto leading-relaxed">
-              Extract, synthesize, and interrogate any active webpage or document with grounded neural intelligence, precision retrieval, and zero hallucination.
+              {t("Extract, synthesize, and interrogate any active webpage or document with grounded neural intelligence, precision retrieval, and zero hallucination.")}
             </p>
 
             {/* Hint about the movable circular widget */}
             <div className="pt-1 text-[11px] text-[var(--color-primary)] font-medium flex items-center justify-center gap-1.5">
               <span className="h-2 w-2 rounded-full bg-emerald-600 animate-pulse" />
-              <span>Movable circular companion icon active on page — drag anywhere or click to open.</span>
+              <span>{t("Movable circular companion icon active on page — drag anywhere or click to open.")}</span>
             </div>
           </div>
 
@@ -202,7 +204,7 @@ export default function ArjunaSarthiPage() {
               className="inline-flex items-center gap-2.5 rounded-xl bg-[var(--color-primary)] hover:bg-[var(--color-primary-hover)] text-white font-bold px-5 py-2.5 text-xs sm:text-sm transition shadow-sm active:scale-95 cursor-pointer"
             >
               <ArrowDownToLine className="h-4 w-4 stroke-[2.5]" />
-              <span>Download Extension (dist.zip)</span>
+              <span>{t("Download Extension (dist.zip)")}</span>
               <span className="text-[11px] bg-black/20 text-white px-2 py-0.5 rounded-md font-mono">
                 99 KB
               </span>
@@ -215,7 +217,7 @@ export default function ArjunaSarthiPage() {
               className="inline-flex items-center gap-2 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] hover:bg-[var(--color-surface)] px-4 py-2.5 text-xs sm:text-sm font-semibold text-[var(--color-text)] transition cursor-pointer"
             >
               <Play className="h-3.5 w-3.5 text-[var(--color-primary)] fill-[var(--color-primary)]" />
-              <span>In-Page Simulator</span>
+              <span>{t("In-Page Simulator")}</span>
             </button>
 
             {/* Jump to Setup Guide */}
@@ -227,7 +229,7 @@ export default function ArjunaSarthiPage() {
               className="inline-flex items-center gap-1.5 rounded-xl border border-[var(--color-border)] bg-[var(--color-surface-elevated)] hover:bg-[var(--color-surface)] px-3.5 py-2.5 text-xs font-semibold text-[var(--color-text-secondary)] hover:text-[var(--color-text)] transition"
             >
               <Terminal className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
-              <span>Installation Steps</span>
+              <span>{t("Installation Steps")}</span>
             </button>
           </div>
 
@@ -276,7 +278,7 @@ export default function ArjunaSarthiPage() {
           <div className="flex items-center gap-2">
             <Layers className="h-5 w-5 text-[var(--color-primary)]" />
             <h2 className="text-xl font-bold tracking-tight text-[var(--color-text)]">
-              4-Layer Celestial Orbit Architecture
+              {t("4-Layer Celestial Orbit Architecture")}
             </h2>
           </div>
 
@@ -287,9 +289,9 @@ export default function ArjunaSarthiPage() {
                 <span className="text-xs font-mono font-bold text-[var(--color-primary)] uppercase">Layer 1</span>
                 <span className="h-2 w-2 rounded-full bg-[var(--color-primary)] animate-pulse" />
               </div>
-              <h3 className="font-bold text-base text-[var(--color-text)]">Prithvi Core</h3>
+              <h3 className="font-bold text-base text-[var(--color-text)]">{t("Prithvi Core")}</h3>
               <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-                DOM Content Extractor. Strips clutter, ads, cookie modals, and navigation to extract clean article and technical text.
+                {t("DOM Content Extractor. Strips clutter, ads, cookie modals, and navigation to extract clean article and technical text.", "DOM Content Extractor. Strips clutter, ads, cookie modals, and navigation to extract clean article and technical text.")}
               </p>
             </div>
 
@@ -299,9 +301,9 @@ export default function ArjunaSarthiPage() {
                 <span className="text-xs font-mono font-bold text-[var(--color-info)] uppercase">Layer 2</span>
                 <span className="h-2 w-2 rounded-full bg-[var(--color-info)] animate-pulse" />
               </div>
-              <h3 className="font-bold text-base text-[var(--color-text)]">Gandiva Bow</h3>
+              <h3 className="font-bold text-base text-[var(--color-text)]">{t("Gandiva Bow")}</h3>
               <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-                RAG Section Chunker. Segments content into traceable semantic blocks with TF-IDF/BM25 relevance scoring.
+                {t("RAG Section Chunker. Segments content into traceable semantic blocks with TF-IDF/BM25 relevance scoring.", "RAG Section Chunker. Segments content into traceable semantic blocks with TF-IDF/BM25 relevance scoring.")}
               </p>
             </div>
 
@@ -311,9 +313,9 @@ export default function ArjunaSarthiPage() {
                 <span className="text-xs font-mono font-bold text-[var(--color-primary)] uppercase">Layer 3</span>
                 <span className="h-2 w-2 rounded-full bg-[var(--color-primary)] animate-pulse" />
               </div>
-              <h3 className="font-bold text-base text-[var(--color-text)]">Tejas Shield</h3>
+              <h3 className="font-bold text-base text-[var(--color-text)]">{t("Tejas Shield")}</h3>
               <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-                Strict Grounding Engine. Prevents hallucination; ensures the LLM admits when requested data is absent from page.
+                {t("Strict Grounding Engine. Prevents hallucination; ensures the LLM admits when requested data is absent from page.", "Strict Grounding Engine. Prevents hallucination; ensures the LLM admits when requested data is absent from page.")}
               </p>
             </div>
 
@@ -323,9 +325,9 @@ export default function ArjunaSarthiPage() {
                 <span className="text-xs font-mono font-bold text-[var(--color-text-muted)] uppercase">Layer 4</span>
                 <span className="h-2 w-2 rounded-full bg-[var(--color-text-muted)] animate-pulse" />
               </div>
-              <h3 className="font-bold text-base text-[var(--color-text)]">Brahmastra Brain</h3>
+              <h3 className="font-bold text-base text-[var(--color-text)]">{t("Brahmastra Brain")}</h3>
               <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
-                Neural Inference Engine. Delivers instant answers with citation links directly mapped to source page headings.
+                {t("Neural Inference Engine. Delivers instant answers with citation links directly mapped to source page headings.", "Neural Inference Engine. Delivers instant answers with citation links directly mapped to source page headings.")}
               </p>
             </div>
           </div>
@@ -340,7 +342,7 @@ export default function ArjunaSarthiPage() {
               <div className="flex items-center gap-2">
                 <Bot className="h-5 w-5 text-[var(--color-primary)]" />
                 <h2 className="text-lg sm:text-xl font-bold text-[var(--color-text)]">
-                  Live Reasoning Playground
+                  {t("Live Reasoning Playground")}
                 </h2>
               </div>
               <p className="text-xs sm:text-sm text-[var(--color-text-secondary)] mt-1">
@@ -424,7 +426,7 @@ export default function ArjunaSarthiPage() {
                 <div className="flex items-center gap-2">
                   <Sparkles className="h-4 w-4 text-[var(--color-primary)]" />
                   <span className="text-xs font-bold text-[var(--color-primary)] uppercase tracking-wider">
-                    Grounded Answer
+                    {t("AI Factual Response")}
                   </span>
                 </div>
                 <span className="text-[10px] font-mono text-[var(--color-text-muted)]">
@@ -439,7 +441,7 @@ export default function ArjunaSarthiPage() {
               {simSources.length > 0 && (
                 <div className="pt-2 border-t border-[var(--color-border-subtle)] space-y-2">
                   <span className="text-[11px] font-semibold text-[var(--color-text-muted)] uppercase tracking-wider block">
-                    Page Grounding Citations
+                    {t("Page Grounding Citations")}
                   </span>
                   <div className="flex flex-wrap gap-2">
                     {simSources.map((s, idx) => (
@@ -465,7 +467,7 @@ export default function ArjunaSarthiPage() {
           <div className="flex items-center gap-2">
             <Terminal className="h-5 w-5 text-amber-400" />
             <h2 className="text-xl font-bold tracking-tight">
-              Chrome / Chromium Installation Guide
+              {t("Chrome / Chromium Installation Guide")}
             </h2>
           </div>
 
@@ -475,7 +477,7 @@ export default function ArjunaSarthiPage() {
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400 font-bold text-xs">
                 01
               </span>
-              <h3 className="font-bold text-sm">Download or Build</h3>
+              <h3 className="font-bold text-sm">{t("Download or Build")}</h3>
               <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
                 Click <strong>Download Extension (dist.zip)</strong> above, or build directly with <code>npm run build</code> inside the <code>extension</code> folder.
               </p>
@@ -486,7 +488,7 @@ export default function ArjunaSarthiPage() {
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400 font-bold text-xs">
                 02
               </span>
-              <h3 className="font-bold text-sm">Open Extensions</h3>
+              <h3 className="font-bold text-sm">{t("Open Extensions")}</h3>
               <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
                 Open Google Chrome, Brave, or Chromium and navigate to:
               </p>
@@ -500,7 +502,7 @@ export default function ArjunaSarthiPage() {
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400 font-bold text-xs">
                 03
               </span>
-              <h3 className="font-bold text-sm">Enable Developer Mode</h3>
+              <h3 className="font-bold text-sm">{t("Enable Developer Mode")}</h3>
               <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
                 Toggle the <strong>Developer mode</strong> switch in the top right corner of the Extensions page.
               </p>
@@ -511,7 +513,7 @@ export default function ArjunaSarthiPage() {
               <span className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-amber-500/15 text-amber-400 font-bold text-xs">
                 04
               </span>
-              <h3 className="font-bold text-sm">Load Unpacked</h3>
+              <h3 className="font-bold text-sm">{t("Load Unpacked")}</h3>
               <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed">
                 Click <strong>Load unpacked</strong> and select the unzipped <code>dist</code> folder:
               </p>
