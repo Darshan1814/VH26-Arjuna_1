@@ -9,10 +9,10 @@ class Settings(BaseSettings):
 
     # --- Groq Configuration ---
     GROQ_API_KEY: str = "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"
-    GROQ_MODEL: str = "openai/gpt-oss-20b"
-    GROQ_FAST_MODEL: str = "openai/gpt-oss-20b"
-    GROQ_REASONING_MODEL: str = "openai/gpt-oss-120b"
-    GROQ_VISION_MODEL: str = "openai/gpt-oss-20b"
+    GROQ_MODEL: str = "llama-3.3-70b-versatile"           # Fast, capable text reasoning
+    GROQ_FAST_MODEL: str = "llama-3.1-8b-instant"         # Ultra-fast for simple tasks
+    GROQ_REASONING_MODEL: str = "llama-3.3-70b-versatile" # Deep reasoning
+    GROQ_VISION_MODEL: str = "meta-llama/llama-4-scout-17b-16e-instruct"  # Groq multimodal vision
 
     # --- Serper Web Search ---
     SERPER_API_KEY: str = ""

@@ -13,10 +13,10 @@ pipeline {
 
         // --- Groq LLM ---
         GROQ_API_KEY              = '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'
-        GROQ_MODEL                = 'qwen/qwen3.8-27b'
-        GROQ_FAST_MODEL           = 'openai/gpt-oss-20b'
-        GROQ_REASONING_MODEL      = 'openai/gpt-oss-120b'
-        GROQ_VISION_MODEL         = 'openai/gpt-oss-20b'
+        GROQ_MODEL                = 'llama-3.3-70b-versatile'
+        GROQ_FAST_MODEL           = 'llama-3.1-8b-instant'
+        GROQ_REASONING_MODEL      = 'llama-3.3-70b-versatile'
+        GROQ_VISION_MODEL         = 'meta-llama/llama-4-scout-17b-16e-instruct'
 
         // --- ElevenLabs Voice AI ---
         ELEVENLABS_API_KEY           = 'sk_fba5cf151cea3db4dfb248622cd85872fd097a02fa15520e'

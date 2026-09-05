@@ -1,5 +1,13 @@
-"""Image Analysis & Error Solving API integrating Peak Industrial OCR, Groq, and Serper web proof links."""
+"""Image Analysis & Error Solving API - Groq Vision-First approach.
 
+Flow:
+  1. Send image DIRECTLY to Groq vision model (base64) → get machine, error code, symptoms
+  2. Run OCR as supplementary evidence (not primary)
+  3. Web search for OEM bulletins
+  4. Final deep reasoning with all context
+"""
+
+import base64
 import io
 import json
 import logging
@@ -7,6 +15,7 @@ import os
 import re
 import sqlite3
 from typing import Any, Optional
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from PIL import Image, ImageEnhance, ImageOps
@@ -43,246 +52,204 @@ class ImageAnalysisResponse(BaseModel):
     proof_links: list[dict[str, str]]
 
 
-def get_known_machines_catalog() -> list[dict[str, Any]]:
-    """Retrieve known machines from SQLite database and baseline facility inventory."""
-    catalog = [
-        {"model": "Siemens SINAMICS V20", "type": "Basic Performance Variable Frequency Drive (VFD)", "keywords": ["v20", "sinamics v20", "siemens v20"]},
-        {"model": "Siemens SINAMICS S120", "type": "Modular Multi-Axis Servo Drive", "keywords": ["sinamics s120", "s120", "cu320"]},
-        {"model": "Siemens SINAMICS G120", "type": "Standard Industrial Variable Frequency Drive", "keywords": ["sinamics g120", "g120"]},
-        {"model": "Emotron VFD / FDU", "type": "Industrial AC Drive & Softstarter", "keywords": ["emotron", "fdu", "vfx"]},
-        {"model": "ABB ACS880", "type": "Industrial Variable Frequency Drive", "keywords": ["acs880", "acs580", "abb vfd"]},
-        {"model": "Schneider Altivar ATV320", "type": "Machine Safety Inverter Drive", "keywords": ["altivar", "atv320", "atv71"]},
-        {"model": "RoboArm-R5", "type": "6-Axis Articulated Industrial Robot", "keywords": ["roboarm", "roboarm-r5", "r5", "articulated", "robot arm", "manipulator"]},
-        {"model": "CNC-X100", "type": "5-Axis CNC Milling Center", "keywords": ["cnc-x100", "x100", "milling", "spindle", "cnc mill", "5-axis"]},
-        {"model": "CNC-L200", "type": "Dual-Spindle CNC Lathe / Turning Center", "keywords": ["cnc-l200", "l200", "lathe", "turning center", "turret", "chuck"]},
-        {"model": "HP-500", "type": "500-Ton Hydraulic Stamping Press", "keywords": ["hp-500", "hp500", "hydraulic press", "500 ton", "ram"]},
-        {"model": "IM-300", "type": "300-Ton Plastic Injection Molding Machine", "keywords": ["im-300", "im300", "injection molding", "barrel heater"]},
-        {"model": "PackPro-200", "type": "High-Speed Automated Packaging & Boxing System", "keywords": ["packpro-200", "packpro", "packaging", "cartoner"]},
-        {"model": "Press-Z200", "type": "Hydraulic Forming & Stamping Press", "keywords": ["press-z200", "z200", "forming press"]},
-        {"model": "Phase-Maker", "type": "Rotary 3-Phase Converter", "keywords": ["phase-maker", "phasemaker", "phase converter"]},
-        {"model": "Fanuc Series 31i", "type": "Multi-Path CNC Control System", "keywords": ["fanuc 31i", "series 31i", "alphai"]},
-        {"model": "Haas VF-2", "type": "Vertical Machining Center", "keywords": ["haas vf-2", "vf2", "haas cnc"]},
-        {"model": "ABB IRB 6700", "type": "High-Payload Industrial Robot", "keywords": ["abb irb 6700", "irb6700", "irc5"]},
-        {"model": "KUKA KR QUANTEC", "type": "Heavy-Duty Foundry Robot", "keywords": ["kuka quantec", "quantec", "krc4"]},
-    ]
+# ---------------------------------------------------------------------------
+# STEP 1: Groq Vision — send image directly, get machine + error identification
+# ---------------------------------------------------------------------------
 
-    db_paths = ["database/troubleshooter.db", "/app/database/troubleshooter.db", "backend/database/troubleshooter.db"]
-    for db_path in db_paths:
-        if os.path.exists(db_path):
-            try:
-                conn = sqlite3.connect(db_path)
-                cursor = conn.cursor()
-                cursor.execute("SELECT DISTINCT machine_model FROM chunks WHERE machine_model IS NOT NULL AND trim(machine_model) != ''")
-                for row in cursor.fetchall():
-                    name = row[0].strip()
-                    if name and not any(c["model"].lower() == name.lower() for c in catalog):
-                        catalog.append({"model": name, "type": "Facility Equipment", "keywords": [name.lower()]})
-                conn.close()
-                break
-            except Exception as e:
-                logger.debug(f"Failed reading machines from {db_path}: {e}")
+def image_bytes_to_base64_url(content: bytes, filename: str) -> str:
+    """Convert raw image bytes to a data URL for the Groq vision API."""
+    ext = (filename.rsplit(".", 1)[-1] if "." in filename else "jpg").lower()
+    mime_map = {"jpg": "image/jpeg", "jpeg": "image/jpeg", "png": "image/png",
+                "webp": "image/webp", "gif": "image/gif", "bmp": "image/png"}
+    mime = mime_map.get(ext, "image/jpeg")
+    b64 = base64.b64encode(content).decode("utf-8")
+    return f"data:{mime};base64,{b64}"
 
-    return catalog
 
+async def groq_vision_identify(
+    content: bytes,
+    filename: str,
+    symptoms: Optional[str],
+    machine_hint: Optional[str],
+    llm,
+) -> dict:
+    """
+    Send the image DIRECTLY to Groq vision model.
+    Returns: { machine, brand, model, error_code, visible_text, fault_description, confidence }
+    """
+    data_url = image_bytes_to_base64_url(content, filename)
+    hint_ctx = ""
+    if machine_hint:
+        hint_ctx += f"\nOperator machine hint: {machine_hint}"
+    if symptoms:
+        hint_ctx += f"\nOperator-reported symptoms: {symptoms}"
+
+    vision_prompt = f"""You are an expert industrial and appliance diagnostic AI.
+Carefully examine this machine/appliance image and extract ALL visible information.{hint_ctx}
+
+Return a JSON object with EXACTLY these fields:
+{{
+  "brand": "Exact brand name visible (e.g. Whirlpool, Siemens, Fanuc, ABB, Samsung, LG, Bosch, etc.) or null",
+  "machine_type": "Type of machine (e.g. Washing Machine, VFD Drive, CNC Machine, Robot, Refrigerator, AC Unit, etc.)",
+  "model": "Specific model number/name visible on the machine or null",
+  "full_machine_name": "Brand + Type + Model combined (e.g. Whirlpool Front Load Washing Machine, Siemens SINAMICS V20 VFD)",
+  "error_code": "EXACT error/fault code visible on display (e.g. F21, E01, ALARM 3, ERR-04) or null if no code",
+  "display_text": "ALL text visible on any display, panel, or label in the image",
+  "visible_symptoms": "Physical symptoms visible: LED color, panel state, any visible damage, component state",
+  "fault_description": "What this error code or condition means for this specific machine",
+  "confidence": 0.95
+}}
+
+CRITICAL: 
+- Read the display EXACTLY - do not guess. Report what you literally see.
+- For washing machines with F-codes (F01, F21, F28 etc), identify the exact Whirlpool/brand fault.
+- For VFDs with A/F codes, identify the exact drive fault.
+- If brand is clearly visible on the machine body, ALWAYS capture it.
+"""
+
+    try:
+        # Use Groq vision model
+        vision_model = getattr(settings, "GROQ_VISION_MODEL", "meta-llama/llama-4-scout-17b-16e-instruct")
+
+        response = llm.client.chat.completions.create(
+            model=vision_model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "image_url", "image_url": {"url": data_url}},
+                        {"type": "text", "text": vision_prompt},
+                    ],
+                }
+            ],
+            temperature=0.1,
+            max_tokens=1024,
+            response_format={"type": "json_object"},
+        )
+
+        raw = response.choices[0].message.content or "{}"
+        result = json.loads(raw)
+        logger.info(f"Groq Vision identified: machine={result.get('full_machine_name')}, error={result.get('error_code')}")
+        return result
+
+    except Exception as e:
+        logger.warning(f"Groq vision identification failed: {e}")
+        return {}
+
+
+# ---------------------------------------------------------------------------
+# STEP 2: OCR (supplementary — helps with text Groq vision may miss)
+# ---------------------------------------------------------------------------
 
 def normalize_error_code(raw_candidate: str) -> str:
-    """Correct common OCR misrecognitions in industrial error codes (e.g. 'FOO1' -> 'F001')."""
+    """Correct common OCR misrecognitions in error codes."""
     code = raw_candidate.strip().upper()
-    # Normalize common 7-segment letter 'O' into zero '0' when following error prefixes
-    if re.match(r"^[FEA]\s*[O0-9]{3,5}$", code):
+    if re.match(r"^[FEA]\s*[O0-9]{2,5}$", code):
         prefix = code[0]
-        digits = code[1:].replace("O", "0").replace(" ", "").replace("D", "0").replace("I", "1").replace("Z", "2")
+        digits = code[1:].replace("O", "0").replace(" ", "").replace("D", "0").replace("I", "1")
         return f"{prefix}{digits}"
     if re.match(r"^ERR[-_\s]*[O0-9]{2,5}$", code):
         digits = re.sub(r"[^0-9O]", "", code[3:]).replace("O", "0")
         return f"ERR-{digits}"
-    if re.match(r"^ALARM\s*[O0-9]{1,4}$", code):
-        digits = re.sub(r"[^0-9O]", "", code[5:]).replace("O", "0")
-        return f"ALARM {digits}"
     return code
 
 
 def is_gibberish_line(line: str) -> bool:
-    """Filter out noisy single-character fragments, random punctuation, and terminal wire clutter."""
+    """Filter OCR noise — keep real words and error codes."""
     clean = line.strip()
     if not clean or len(clean) < 2:
         return True
-
-    # High-value industrial keywords and error patterns are NEVER gibberish
-    if re.search(r"\b(?:[A-Z]\d{2,5}|ALARM|FAULT|ERR|WARN|SIEMENS|V20|S120|FANUC|HAAS|ROBOT|DRIVE|VOLT|MOTOR|AXIS|OVERHEAT|TRIP|CODE|VFD|EMOTRON|ABB|SCHNEIDER)\b", clean, re.I):
+    # Always keep lines with error code patterns or known industrial keywords
+    if re.search(r"\b(?:[A-Z]\d{2,5}|ALARM|FAULT|ERR|WARN|ERROR|CODE|MOTOR|DRIVE|TEMP|OVER)\b", clean, re.I):
         return False
-
     words = clean.split()
     short_tokens = sum(1 for w in words if len(re.sub(r"[^a-zA-Z0-9]", "", w)) <= 2)
-    # If 70%+ tokens are 1-2 chars with punctuation (e.g. 'eT a ek kd as *', 'A bor bs }')
     if len(words) >= 2 and (short_tokens / len(words)) >= 0.7:
         return True
-
     alnum = sum(1 for c in clean if c.isalnum() or c.isspace())
-    if len(clean) > 5 and (alnum / len(clean)) < 0.60:
+    if len(clean) > 5 and (alnum / len(clean)) < 0.55:
         return True
-
     return False
 
 
-def perform_peak_ocr(content: bytes) -> tuple[str, list[str], list[str]]:
-    """Run multi-tier industrial computer vision OCR optimized for 7-segment displays, LEDs, and machine plates."""
+def perform_ocr(content: bytes) -> tuple[str, list[str]]:
+    """Multi-tier OCR — supplementary to Groq Vision, not primary."""
     ocr_raw_lines: list[str] = []
     extracted_error_codes: list[str] = []
 
-    # Strategy 1: OpenCV Advanced Preprocessing (if available)
     if OPENCV_AVAILABLE:
         try:
             nparr = np.frombuffer(content, np.uint8)
             img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
-
             if img_bgr is not None:
-                h, w = img_bgr.shape[:2]
-                # Scale up 2.2x with cubic interpolation for small LED/nameplate fonts
-                scaled_bgr = cv2.resize(img_bgr, (0, 0), fx=2.2, fy=2.2, interpolation=cv2.INTER_CUBIC)
-                gray = cv2.cvtColor(scaled_bgr, cv2.COLOR_BGR2GRAY)
+                # Scale up for better OCR
+                scaled = cv2.resize(img_bgr, (0, 0), fx=2.5, fy=2.5, interpolation=cv2.INTER_CUBIC)
+                gray = cv2.cvtColor(scaled, cv2.COLOR_BGR2GRAY)
 
-                # --- PASS A: Glowing RED LED 7-Segment Isolation (standard on VFDs like Siemens V20) ---
-                b_ch, g_ch, r_ch = cv2.split(scaled_bgr)
-                red_diff = r_ch.astype(np.int16) - ((g_ch.astype(np.int16) + b_ch.astype(np.int16)) // 2)
-                red_mask = np.clip(red_diff, 0, 255).astype(np.uint8)
-                _, red_thresh = cv2.threshold(red_mask, 40, 255, cv2.THRESH_BINARY)
-                # Bridge 7-segment LED gaps
-                close_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-                red_closed = cv2.morphologyEx(red_thresh, cv2.MORPH_CLOSE, close_kernel)
-                red_inv = cv2.bitwise_not(red_closed)
-                t_led = pytesseract.image_to_string(red_inv, config="--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_")
-                if t_led.strip():
-                    ocr_raw_lines.append(t_led.strip())
+                # PASS A: Red LED display (VFDs, error panels)
+                b_ch, g_ch, r_ch = cv2.split(scaled)
+                red_diff = np.clip(r_ch.astype(np.int16) - ((g_ch.astype(np.int16) + b_ch.astype(np.int16)) // 2), 0, 255).astype(np.uint8)
+                _, red_thresh = cv2.threshold(red_diff, 35, 255, cv2.THRESH_BINARY)
+                kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+                red_closed = cv2.morphologyEx(red_thresh, cv2.MORPH_CLOSE, kernel)
+                t = pytesseract.image_to_string(cv2.bitwise_not(red_closed),
+                    config="--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_")
+                if t.strip():
+                    ocr_raw_lines.append(t.strip())
 
-                # --- PASS B: Glowing GREEN/AMBER LED Isolation ---
-                green_diff = g_ch.astype(np.int16) - ((r_ch.astype(np.int16) + b_ch.astype(np.int16)) // 2)
-                green_mask = np.clip(green_diff, 0, 255).astype(np.uint8)
-                _, green_thresh = cv2.threshold(green_mask, 40, 255, cv2.THRESH_BINARY)
-                green_closed = cv2.morphologyEx(green_thresh, cv2.MORPH_CLOSE, close_kernel)
-                green_inv = cv2.bitwise_not(green_closed)
-                t_green = pytesseract.image_to_string(green_inv, config="--psm 7 -c tessedit_char_whitelist=ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.-_")
-                if t_green.strip():
-                    ocr_raw_lines.append(t_green.strip())
-
-                # --- PASS C: High-Contrast Inverted Grayscale (Dark Screen, Bright Digits) ---
+                # PASS B: CLAHE enhanced for printed labels
                 clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
-                enhanced_gray = clahe.apply(gray)
-                inv_gray = cv2.bitwise_not(enhanced_gray)
-                t_inv = pytesseract.image_to_string(inv_gray, config="--psm 6")
-                if t_inv.strip():
-                    ocr_raw_lines.append(t_inv.strip())
+                enhanced = clahe.apply(gray)
+                t2 = pytesseract.image_to_string(enhanced, config="--psm 6")
+                if t2.strip():
+                    ocr_raw_lines.append(t2.strip())
 
-                # --- PASS D: Adaptive Thresholding for Printed Nameplates & Labels ---
-                adapt_thresh = cv2.adaptiveThreshold(
-                    enhanced_gray, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 5
-                )
-                t_adapt = pytesseract.image_to_string(adapt_thresh, config="--psm 11")
-                if t_adapt.strip():
-                    ocr_raw_lines.append(t_adapt.strip())
+                # PASS C: Adaptive threshold for nameplates
+                adapt = cv2.adaptiveThreshold(enhanced, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 21, 5)
+                t3 = pytesseract.image_to_string(adapt, config="--psm 11")
+                if t3.strip():
+                    ocr_raw_lines.append(t3.strip())
 
-                # --- PASS E: Direct High-Resolution Grayscale ---
-                t_direct = pytesseract.image_to_string(enhanced_gray, config="--psm 3")
-                if t_direct.strip():
-                    ocr_raw_lines.append(t_direct.strip())
+        except Exception as e:
+            logger.warning(f"OpenCV OCR error: {e}")
 
-        except Exception as cv_err:
-            logger.warning(f"OpenCV peak OCR failed: {cv_err}")
-
-    # Fallback / PIL Processing (if OpenCV is unavailable or as complement)
+    # PIL fallback
     if not ocr_raw_lines:
         try:
-            pil_img = Image.open(io.BytesIO(content))
-            g = pil_img.convert("L")
-            g_scaled = g.resize((g.width * 2, g.height * 2), Image.Resampling.BICUBIC)
-            enh = ImageEnhance.Contrast(g_scaled).enhance(2.0)
-            ocr_raw_lines.append(pytesseract.image_to_string(enh, config="--psm 6"))
-            ocr_raw_lines.append(pytesseract.image_to_string(ImageOps.invert(enh), config="--psm 7"))
-        except Exception as pil_err:
-            logger.warning(f"PIL OCR failed: {pil_err}")
+            pil = Image.open(io.BytesIO(content)).convert("L")
+            pil = pil.resize((pil.width * 2, pil.height * 2), Image.Resampling.BICUBIC)
+            pil = ImageEnhance.Contrast(pil).enhance(2.0)
+            ocr_raw_lines.append(pytesseract.image_to_string(pil, config="--psm 6"))
+            ocr_raw_lines.append(pytesseract.image_to_string(ImageOps.invert(pil), config="--psm 7"))
+        except Exception as e:
+            logger.warning(f"PIL OCR error: {e}")
 
-    # Aggregate, parse error codes, and filter noise
     all_text = "\n".join(ocr_raw_lines)
-    raw_error_matches = re.findall(
-        r"\b(?:[FEA]\s*[O0-9]{3,5}|ERR[-:\s]*[0-9]{2,4}|ALARM\s*[0-9]{1,4}|[A-Z]{1,3}[-_\s]?[0-9]{3,5}|0x[0-9A-Fa-f]{2,6})\b",
-        all_text,
-        re.IGNORECASE,
-    )
-    for rm in raw_error_matches:
+
+    # Extract error codes from OCR
+    for rm in re.findall(
+        r"\b(?:[FEA]\s*[O0-9]{2,5}|ERR[-:\s]*[0-9]{2,4}|ALARM\s*[0-9]{1,4}|[A-Z]{1,3}[-_\s]?[0-9]{3,5}|0x[0-9A-Fa-f]{2,6})\b",
+        all_text, re.IGNORECASE
+    ):
         norm = normalize_error_code(rm)
         if norm not in extracted_error_codes and len(norm) >= 3:
             extracted_error_codes.append(norm)
 
-    # Clean and filter lines to discard terminal gibberish
-    clean_lines = []
-    seen_clean = set()
+    # Clean OCR lines
+    clean_lines, seen = [], set()
     for block in ocr_raw_lines:
         for line in block.split("\n"):
-            line_s = line.strip()
-            if not is_gibberish_line(line_s) and line_s not in seen_clean:
-                seen_clean.add(line_s)
-                clean_lines.append(line_s)
+            ls = line.strip()
+            if not is_gibberish_line(ls) and ls not in seen:
+                seen.add(ls)
+                clean_lines.append(ls)
 
-    final_ocr = "\n".join(clean_lines).strip()
-    return final_ocr, extracted_error_codes, ocr_raw_lines
+    return "\n".join(clean_lines).strip(), extracted_error_codes
 
 
-def extract_machine_from_context(
-    symptoms: Optional[str],
-    machine_hint: Optional[str],
-    ocr_text: str,
-    filename: str,
-    catalog: list[dict[str, Any]],
-) -> Optional[str]:
-    """Smart equipment extractor prioritizing explicit operator input and model signatures."""
-    user_inputs = f"{machine_hint or ''} {symptoms or ''}".strip()
-
-    # Step 1: Explicit patterns in operator symptoms or hint (Highest Priority)
-    patterns = [
-        (r"\b(siemens\s+v20|sinamics\s+v20|v20\s+vfd|v20)\b", "Siemens SINAMICS V20"),
-        (r"\b(siemens\s+s120|sinamics\s+s120|s120)\b", "Siemens SINAMICS S120"),
-        (r"\b(siemens\s+g120|sinamics\s+g120|g120)\b", "Siemens SINAMICS G120"),
-        (r"\b(emotron\s+(?:vfd|fdu|vfx|\w+)|emotron)\b", "Emotron VFD / FDU"),
-        (r"\b(abb\s+(?:acs880|acs580|acs355|vfd)|acs880|acs580)\b", "ABB ACS880"),
-        (r"\b(altivar\s*(?:320|71|atv320)?|atv320)\b", "Schneider Altivar ATV320"),
-        (r"\b(roboarm[-_\s]?r5|roboarm|r5\s+robot)\b", "RoboArm-R5"),
-        (r"\b(cnc[-_\s]?x100|x100\s+mill)\b", "CNC-X100"),
-        (r"\b(cnc[-_\s]?l200|l200\s+lathe)\b", "CNC-L200"),
-        (r"\b(hp[-_\s]?500|500[-_\s]?ton\s+press)\b", "HP-500"),
-        (r"\b(im[-_\s]?300|injection\s+molding\s+300)\b", "IM-300"),
-        (r"\b(packpro[-_\s]?200|packpro)\b", "PackPro-200"),
-        (r"\b(press[-_\s]?z200|z200)\b", "Press-Z200"),
-        (r"\b(phase[-_\s]?maker|phasemaker)\b", "Phase-Maker"),
-        (r"\b(fanuc\s+(?:series\s+)?(?:0i|31i|\w+))\b", "Fanuc Series 31i"),
-        (r"\b(haas\s+(?:vf[-_\s]?[0-9]+|umc[-_\s]?[0-9]+))\b", "Haas VF-2"),
-    ]
-
-    for pat, matched_name in patterns:
-        if re.search(pat, user_inputs, re.IGNORECASE):
-            return matched_name
-
-    # Step 2: Check OCR Text and Filename for explicit models
-    corpus_media = f"{filename} {ocr_text}".lower()
-    for pat, matched_name in patterns:
-        if re.search(pat, corpus_media, re.IGNORECASE):
-            return matched_name
-
-    # Step 3: Match from Database / Facility Catalog
-    for item in catalog:
-        model = item["model"]
-        keywords = item.get("keywords", [])
-        for kw in keywords:
-            if re.search(rf"\b{re.escape(kw)}\b", user_inputs.lower()):
-                return model
-            if re.search(rf"\b{re.escape(kw)}\b", corpus_media):
-                return model
-
-    # If user provided a custom hint that wasn't matched above, honor it
-    if machine_hint and machine_hint.strip() and machine_hint.strip() != "Siemens SINAMICS S120 / CNC Drive":
-        return machine_hint.strip()
-
-    return None
-
+# ---------------------------------------------------------------------------
+# Main endpoint
+# ---------------------------------------------------------------------------
 
 @router.post("/analyze", response_model=ImageAnalysisResponse)
 async def analyze_image_and_solve_error(
@@ -290,7 +257,10 @@ async def analyze_image_and_solve_error(
     symptoms: Optional[str] = Form(None),
     machine_hint: Optional[str] = Form(None),
 ):
-    """Analyze uploaded machine panel, alarm screen, or component photo with peak industrial OCR and Groq reasoning."""
+    """
+    Analyze uploaded machine/appliance image using Groq Vision + OCR + Web Search.
+    Groq Vision reads the image directly — no dependency on OCR quality for identification.
+    """
     if not file:
         raise HTTPException(status_code=400, detail="Image file is required")
 
@@ -299,113 +269,150 @@ async def analyze_image_and_solve_error(
         raise HTTPException(status_code=400, detail="Empty image file received")
 
     filename = file.filename or "machine_photo.jpg"
+    symptoms_text = (symptoms or "").strip()
+    llm = get_openai_client()
 
-    # Step 1: Perform Peak Industrial Multi-Tier OCR
-    clean_ocr, extracted_codes, raw_passes = perform_peak_ocr(content)
+    # ----------------------------------------------------------------
+    # STEP 1: Groq Vision — direct image analysis (PRIMARY)
+    # ----------------------------------------------------------------
+    vision_result = await groq_vision_identify(content, filename, symptoms_text, machine_hint, llm)
 
-    # Step 2: Extract Error Code from OCR, Symptoms, and Filename
-    symptoms_text = symptoms.strip() if symptoms else ""
-    symptoms_codes = re.findall(
-        r"\b(?:[FEA]\s*[O0-9]{3,5}|ERR[-:\s]*[0-9]{2,4}|ALARM\s*[0-9]{1,4}|[A-Z]{1,3}[-_\s]?[0-9]{3,5})\b",
-        f"{symptoms_text} {filename}",
-        re.IGNORECASE,
+    vision_machine   = vision_result.get("full_machine_name") or vision_result.get("machine_type") or ""
+    vision_brand     = vision_result.get("brand") or ""
+    vision_model_num = vision_result.get("model") or ""
+    vision_error     = vision_result.get("error_code") or ""
+    vision_display   = vision_result.get("display_text") or ""
+    vision_symptoms  = vision_result.get("visible_symptoms") or ""
+    vision_fault_desc = vision_result.get("fault_description") or ""
+
+    # ----------------------------------------------------------------
+    # STEP 2: OCR — supplementary text extraction
+    # ----------------------------------------------------------------
+    ocr_text, ocr_codes = perform_ocr(content)
+
+    # ----------------------------------------------------------------
+    # STEP 3: Merge Vision + OCR + User Input → best error code & machine
+    # ----------------------------------------------------------------
+
+    # Error code: vision > symptoms text > OCR
+    symptom_codes = re.findall(
+        r"\b(?:[FEA]\s*[O0-9]{2,5}|ERR[-:\s]*[0-9]{2,4}|ALARM\s*[0-9]{1,4}|[A-Z]{1,3}[-_\s]?[0-9]{3,5})\b",
+        f"{symptoms_text} {filename}", re.IGNORECASE
     )
-    normalized_symptom_codes = [normalize_error_code(c) for c in symptoms_codes]
+    symptom_codes = [normalize_error_code(c) for c in symptom_codes]
 
-    all_candidate_codes = normalized_symptom_codes + extracted_codes
-    detected_code = all_candidate_codes[0] if all_candidate_codes else None
+    # Priority: vision > symptoms > ocr
+    if vision_error:
+        detected_code = normalize_error_code(vision_error)
+    elif symptom_codes:
+        detected_code = symptom_codes[0]
+    elif ocr_codes:
+        detected_code = ocr_codes[0]
+    else:
+        detected_code = None
 
-    # Step 3: Precise Machine Detection
-    catalog = get_known_machines_catalog()
-    matched_machine = extract_machine_from_context(symptoms, machine_hint, clean_ocr, filename, catalog)
-    final_detected_machine = matched_machine or "Industrial Machinery"
+    # Machine: vision > machine_hint > "Unknown Machine"
+    if vision_machine and vision_machine.lower() not in ("unknown", "none", ""):
+        final_machine = vision_machine
+    elif machine_hint and machine_hint.strip():
+        final_machine = machine_hint.strip()
+    else:
+        final_machine = "Unknown Machine"
 
-    # Format the OCR text display for clarity
-    display_ocr_elements = []
+    # ----------------------------------------------------------------
+    # Build OCR display section
+    # ----------------------------------------------------------------
+    display_parts = []
+    if vision_machine:
+        display_parts.append(f"[VISION IDENTIFIED]: {vision_machine}")
     if detected_code:
-        display_ocr_elements.append(f"[DETECTED FAULT CODE]: {detected_code}")
-    if matched_machine:
-        display_ocr_elements.append(f"[IDENTIFIED EQUIPMENT]: {matched_machine}")
-    if clean_ocr:
-        display_ocr_elements.append(f"[OCR RECOGNIZED TEXT]:\n{clean_ocr}")
-    elif not detected_code:
-        display_ocr_elements.append("[VISUAL PHOTO ANALYSIS: Machine component photo without printed text plate. Analyzing physical wear, wiring, and operator symptoms.]")
+        display_parts.append(f"[ERROR CODE DETECTED]: {detected_code}")
+    if vision_display:
+        display_parts.append(f"[DISPLAY TEXT (Vision)]: {vision_display}")
+    if vision_symptoms:
+        display_parts.append(f"[VISIBLE SYMPTOMS]: {vision_symptoms}")
+    if vision_fault_desc:
+        display_parts.append(f"[FAULT MEANING]: {vision_fault_desc}")
+    if ocr_text:
+        display_parts.append(f"[OCR SUPPLEMENTARY]:\n{ocr_text}")
 
-    formatted_ocr_display = "\n\n".join(display_ocr_elements)
+    if not display_parts:
+        display_parts.append("[VISUAL ANALYSIS]: Analyzing machine photo for fault conditions...")
 
-    # Step 4: Live Web Surfing via Serper for Verified OEM Bulletins
-    search_query = f"{final_detected_machine} {detected_code or ''} {symptoms_text}".strip()
+    formatted_ocr_display = "\n\n".join(display_parts)
+
+    # ----------------------------------------------------------------
+    # STEP 4: Web Search for OEM Bulletins
+    # ----------------------------------------------------------------
+    search_query = f"{final_machine} {detected_code or ''} {symptoms_text}".strip()
     web_search = get_web_search_service()
-    proof_links = await web_search.search(search_query or "industrial machine fault diagnosis troubleshooting manual", num_results=5)
+    proof_links = await web_search.search(
+        search_query or "machine fault diagnosis troubleshooting manual", num_results=5
+    )
     web_context = web_search.format_sources_for_prompt(proof_links)
 
-    # Step 5: Deep Industrial Reasoning via Groq
-    prompt = f"""You are an elite industrial machinery diagnostics expert, electrical engineer, and reliability specialist.
-An operator or technician has uploaded a machine photo / error screen and provided diagnostic details:
+    # ----------------------------------------------------------------
+    # STEP 5: Deep reasoning via Groq LLM
+    # ----------------------------------------------------------------
+    prompt = f"""You are an elite industrial machinery and appliance diagnostics expert.
 
---- INPUT TELEMETRY & OCR ---
-Detected Equipment: {final_detected_machine}
-Detected Error Code: {detected_code or 'OPERATIONAL_FAULT'}
-Extracted OCR Evidence:
-{formatted_ocr_display}
-User-Supplied Symptoms: {symptoms_text or 'Visual inspection of machine photo and operating condition'}
-Uploaded Filename: {filename}
------------------------------
+GROQ VISION IDENTIFIED:
+  Machine: {final_machine}
+  Brand: {vision_brand or 'See image'}
+  Model: {vision_model_num or 'See image'}
+  Error Code on Display: {detected_code or 'No code — visual fault'}
+  Display Text: {vision_display or 'N/A'}
+  Visible Symptoms: {vision_symptoms or 'N/A'}
+  Fault Meaning (Vision): {vision_fault_desc or 'N/A'}
 
-Live OEM Technical Bulletins & Proof Links from Serper Search:
+OPERATOR INPUT:
+  Symptoms: {symptoms_text or 'Not provided'}
+  Machine Hint: {machine_hint or 'Not provided'}
+  Filename: {filename}
+
+OCR SUPPLEMENTARY TEXT:
+{ocr_text or 'No OCR text extracted'}
+
+LIVE OEM BULLETINS (Web Search):
 {web_context}
 
-CRITICAL RULES:
-1. Provide a rigorous, manufacturer-grade engineering diagnosis for {final_detected_machine}.
-2. If this is an overcurrent, ground fault, or motor overload alarm (such as F001 on Siemens V20 / VFD), explain the physical mechanism (e.g. motor winding impedance drop, locked rotor, improper ramp-up time P1120, load jamming, or defective power module).
-3. Do NOT hallucinate or revert to a generic drive if {final_detected_machine} is specified.
+TASK: Provide a precise, manufacturer-specific diagnosis for {final_machine} with error code {detected_code or 'visual fault'}.
 
-Return a valid JSON object matching this exact schema:
+Return a valid JSON object:
 {{
   "detected_error_code": "{detected_code or 'FAULT-INSPECTION'}",
-  "detected_machine": "{final_detected_machine}",
-  "problem": "Clear, technical title of the fault (e.g. Overcurrent / Motor Protection Trip on {final_detected_machine})",
-  "diagnosis": "Comprehensive engineering diagnosis explaining the electrical, mechanical, or thermal root cause that tripped this alarm",
-  "answer": "Complete step-by-step diagnostic and recovery protocol citing parameter checks, multimeter measurements, and OEM guidelines",
+  "detected_machine": "{final_machine}",
+  "problem": "Clear technical title of the fault for {final_machine}",
+  "diagnosis": "Comprehensive root cause analysis specific to {final_machine} and {detected_code or 'the visible fault'}",
+  "answer": "Complete step-by-step repair and recovery procedure for {final_machine}",
   "probable_causes": [
-    "Cause 1 with specific component and mechanism",
-    "Cause 2 with specific electrical/mechanical threshold",
-    "Cause 3"
+    "Specific cause 1 for {final_machine}",
+    "Specific cause 2",
+    "Specific cause 3"
   ],
   "corrective_steps": [
-    "Step 1: Emergency Stop / Lockout-Tagout (LOTO) isolation",
-    "Step 2: Megger test / winding resistance and motor lead inspection",
-    "Step 3: Drive parameter verification (e.g. ramp time, motor current limit)",
-    "Step 4: Fault reset and unloaded test run"
+    "Step 1: Safety isolation procedure",
+    "Step 2: Diagnostic check",
+    "Step 3: Repair action",
+    "Step 4: Test and verify"
   ],
   "recommended_solutions": [
     {{
       "priority": 1,
-      "action": "Immediate motor winding resistance and cable insulation check",
-      "reason": "Directly verifies whether trip is caused by motor short or cable damage",
+      "action": "Most critical fix",
+      "reason": "Why this fixes the issue",
       "evidence_strength": "High",
-      "source": "OEM Technical Manual & Serper Bulletins",
-      "is_verified": true
-    }},
-    {{
-      "priority": 2,
-      "action": "Check drive acceleration ramp-up time and mechanical load",
-      "reason": "Prevents instantaneous overcurrent during motor acceleration",
-      "evidence_strength": "Medium",
-      "source": "Field Commissioning Guide",
+      "source": "OEM Manual / Service Bulletin",
       "is_verified": true
     }}
   ],
   "safety_warnings": [
-    "DANGER: Follow OSHA 1910.147 Lockout/Tagout (LOTO) procedures before touching motor leads or drive terminals.",
-    "CAUTION: DC bus capacitors retain hazardous voltage (up to 600V+ DC) for 5+ minutes after AC power isolation.",
-    "PPE: Wear NFPA 70E rated arc-flash protective gear and insulated safety gloves."
+    "Relevant safety warning for {final_machine}"
   ],
-  "confidence": 0.96
+  "confidence": 0.95
 }}
 """
 
-    llm = get_openai_client()
     try:
         data = llm.json_completion(
             messages=[{"role": "user", "content": prompt}],
@@ -413,25 +420,23 @@ Return a valid JSON object matching this exact schema:
             model=settings.GROQ_MODEL,
         )
     except Exception as e:
-        logger.error(f"Error analyzing image with Groq: {e}")
+        logger.error(f"Groq reasoning failed: {e}")
         data = {}
 
-    final_machine = data.get("detected_machine") or final_detected_machine
-    final_error = data.get("detected_error_code") or detected_code or "FAULT-INSPECTION"
+    final_machine_out = data.get("detected_machine") or final_machine
+    final_error_out   = data.get("detected_error_code") or detected_code or "FAULT-INSPECTION"
 
     return ImageAnalysisResponse(
         ocr_text=formatted_ocr_display,
-        detected_error_code=final_error,
-        detected_machine=final_machine,
-        problem=data.get("problem", f"{final_machine} Diagnostic Inspection"),
-        diagnosis=data.get("diagnosis", f"Diagnostic assessment synthesized from photo evidence and OEM documentation for {final_machine}."),
-        answer=data.get("answer", f"Structured troubleshooting procedure synthesized for {final_machine}."),
-        probable_causes=data.get("probable_causes", ["Motor overload or mechanical binding", "Wiring insulation breakdown", "Parameter configuration mismatch"]),
-        corrective_steps=data.get("corrective_steps", ["Perform LOTO isolation", "Inspect motor leads and mechanical load", "Reset fault and verify"]),
+        detected_error_code=final_error_out,
+        detected_machine=final_machine_out,
+        problem=data.get("problem", f"{final_machine_out} — {final_error_out} Diagnostic"),
+        diagnosis=data.get("diagnosis", f"Diagnosis for {final_machine_out} with fault {final_error_out}."),
+        answer=data.get("answer", "Follow OEM service manual for fault resolution."),
+        probable_causes=data.get("probable_causes", ["Check error code in OEM manual", "Inspect visible components", "Run diagnostics"]),
+        corrective_steps=data.get("corrective_steps", ["Safety isolation", "Diagnose fault", "Repair", "Test"]),
         recommended_solutions=data.get("recommended_solutions", []),
-        safety_warnings=data.get("safety_warnings", ["Observe factory Lockout/Tagout and electrical safety standards."]),
-        confidence=float(data.get("confidence", 0.94)),
+        safety_warnings=data.get("safety_warnings", ["Follow safety procedures before servicing."]),
+        confidence=float(data.get("confidence", 0.95)),
         proof_links=proof_links,
     )
-
-
