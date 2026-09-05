@@ -8,11 +8,13 @@ from pydantic import BaseModel, Field
 
 logger = logging.getLogger(__name__)
 
+import os
+
 router = APIRouter()
 
-RAPIDAPI_URL = "https://deep-translate1.p.rapidapi.com/language/translate/v2"
-RAPIDAPI_HOST = "deep-translate1.p.rapidapi.com"
-RAPIDAPI_KEY = "0c41dd989fmsh8331390bf41a4cfp14a23ajsn42c4974f6cb0"
+RAPIDAPI_URL = os.getenv("RAPIDAPI_TRANSLATE_URL", "https://google-translate113.p.rapidapi.com/api/v1/translator/json")
+RAPIDAPI_HOST = os.getenv("RAPIDAPI_TRANSLATE_HOST", "google-translate113.p.rapidapi.com")
+RAPIDAPI_KEY = os.getenv("RAPIDAPI_TRANSLATE_KEY", "b1a558b970msh50fa1ca2ca7b848p115313jsnc47976bd985d")
 
 # In-memory translation cache to save quota and speed up repeated requests
 # Key: (text, source_lang, target_lang) -> Value: translated_text
@@ -281,29 +283,84 @@ def translate_with_groq_batch(texts: List[str], source: str, target: str) -> Lis
     return [lang_dict.get(t, t) for t in texts]
 
 
-async def call_deep_translate_api(text: str, source: str, target: str) -> str:
-    """Call Deep Translate RapidAPI, with automatic Groq LLM fallback."""
+async def call_google_translate113_json_batch(texts: List[str], indices: List[int], source: str, target: str) -> Dict[int, str]:
+    """Call Google Translate 113 RapidAPI JSON translator endpoint with structured mapping."""
+    if not texts:
+        return {}
+    
     headers = {
         "Content-Type": "application/json",
         "x-rapidapi-host": RAPIDAPI_HOST,
         "x-rapidapi-key": RAPIDAPI_KEY,
     }
-    payload = {"q": text, "source": source, "target": target}
+    
+    json_payload = {str(orig_idx): text for orig_idx, text in zip(indices, texts)}
+    payload = {
+        "from": "auto" if source.lower() in ["auto", "en"] else source,
+        "to": target,
+        "json": json_payload,
+    }
 
     try:
-        async with httpx.AsyncClient(timeout=4.0) as client:
+        async with httpx.AsyncClient(timeout=8.0) as client:
             resp = await client.post(RAPIDAPI_URL, headers=headers, json=payload)
             if resp.status_code == 200:
                 data = resp.json()
-                translated = (
-                    data.get("data", {})
-                    .get("translations", {})
-                    .get("translatedText")
+                trans_dict = (
+                    data.get("trans")
+                    or data.get("result")
+                    or data.get("json")
+                    or data.get("data")
+                    or (data if isinstance(data, dict) and any(str(k) in data for k in indices) else {})
                 )
-                if translated:
-                    return str(translated)
-    except Exception:
-        pass
+                if isinstance(trans_dict, dict):
+                    extracted = {}
+                    for orig_idx, orig_text in zip(indices, texts):
+                        val = trans_dict.get(str(orig_idx)) or trans_dict.get(orig_idx)
+                        if val and isinstance(val, str) and val.strip():
+                            extracted[orig_idx] = val.strip()
+                    if extracted:
+                        logger.info(f"Google Translate 113 successfully translated {len(extracted)} strings to {target}")
+                        return extracted
+            else:
+                logger.warning(f"Google Translate 113 returned {resp.status_code}: {resp.text[:120]}")
+    except Exception as e:
+        logger.warning(f"Google Translate 113 batch request failed: {e}")
+
+    return {}
+
+
+async def call_google_translate113_api(text: str, source: str, target: str) -> str:
+    """Call Google Translate 113 RapidAPI JSON endpoint for a single string, with automatic Groq LLM fallback."""
+    headers = {
+        "Content-Type": "application/json",
+        "x-rapidapi-host": RAPIDAPI_HOST,
+        "x-rapidapi-key": RAPIDAPI_KEY,
+    }
+    payload = {
+        "from": "auto" if source.lower() in ["auto", "en"] else source,
+        "to": target,
+        "json": {"q": text},
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            resp = await client.post(RAPIDAPI_URL, headers=headers, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                trans_dict = (
+                    data.get("trans")
+                    or data.get("result")
+                    or data.get("json")
+                    or data.get("data")
+                    or data
+                )
+                if isinstance(trans_dict, dict):
+                    translated = trans_dict.get("q")
+                    if translated and isinstance(translated, str) and translated.strip():
+                        return translated.strip()
+    except Exception as e:
+        logger.warning(f"Google Translate 113 single request failed: {e}")
 
     # Fallback to local dictionary
     lang_dict = FALLBACK_DICTIONARY.get(target.lower(), {})
@@ -337,7 +394,7 @@ async def translate_text(req: TranslateRequest):
                 provider="cache",
             )
 
-        translated = await call_deep_translate_api(req.q, req.source, req.target)
+        translated = await call_google_translate113_api(req.q, req.source, req.target)
         if translated and translated.strip() != req.q.strip():
             TRANSLATION_CACHE[cache_key] = translated
             save_disk_cache()
@@ -345,7 +402,7 @@ async def translate_text(req: TranslateRequest):
             translated_text=translated,
             source=req.source,
             target=req.target,
-            provider="groq_or_api",
+            provider="google_translate_113",
         )
 
     # Batch translation
@@ -368,18 +425,37 @@ async def translate_text(req: TranslateRequest):
             uncached_indices.append(idx)
             uncached_texts.append(item)
 
-    # 2. Batch-translate uncached items via Groq in chunks of 35
+    # 2. Batch-translate uncached items via Google Translate 113 JSON API with Groq fallback
     if uncached_texts:
         CHUNK_SIZE = 35
         for i in range(0, len(uncached_texts), CHUNK_SIZE):
             chunk_texts = uncached_texts[i:i + CHUNK_SIZE]
             chunk_indices = uncached_indices[i:i + CHUNK_SIZE]
-            translated_chunk = translate_with_groq_batch(chunk_texts, req.source, req.target)
-            for orig_idx, orig_text, trans_text in zip(chunk_indices, chunk_texts, translated_chunk):
-                results[orig_idx] = trans_text
-                # Only cache if actually translated to avoid poisoning cache with raw English
-                if trans_text and trans_text.strip() != orig_text.strip():
-                    TRANSLATION_CACHE[(orig_text, source_lower, target_lower)] = trans_text
+
+            # Try primary Google Translate 113 JSON endpoint
+            translated_map = await call_google_translate113_json_batch(
+                chunk_texts, chunk_indices, req.source, req.target
+            )
+
+            # Check which items still need fallback translation
+            remaining_texts = []
+            remaining_indices = []
+            for orig_idx, orig_text in zip(chunk_indices, chunk_texts):
+                if orig_idx in translated_map:
+                    results[orig_idx] = translated_map[orig_idx]
+                    if translated_map[orig_idx] != orig_text:
+                        TRANSLATION_CACHE[(orig_text, source_lower, target_lower)] = translated_map[orig_idx]
+                else:
+                    remaining_texts.append(orig_text)
+                    remaining_indices.append(orig_idx)
+
+            # Fall back to Groq for any remaining/failed translations
+            if remaining_texts:
+                groq_translated = translate_with_groq_batch(remaining_texts, req.source, req.target)
+                for orig_idx, orig_text, trans_text in zip(remaining_indices, remaining_texts, groq_translated):
+                    results[orig_idx] = trans_text
+                    if trans_text and trans_text.strip() != orig_text.strip():
+                        TRANSLATION_CACHE[(orig_text, source_lower, target_lower)] = trans_text
 
         save_disk_cache()
 
@@ -387,5 +463,5 @@ async def translate_text(req: TranslateRequest):
         translated_text=results,
         source=req.source,
         target=req.target,
-        provider="groq_batch",
+        provider="google_translate_113",
     )

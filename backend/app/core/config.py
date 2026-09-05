@@ -70,10 +70,22 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
+# Normalize paths if running outside Docker (e.g. macOS local where /app is read-only)
+if not os.path.exists("/app") or not os.access("/app", os.W_OK):
+    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    if settings.MANUALS_DIR.startswith("/app"):
+        settings.MANUALS_DIR = os.path.join(base_dir, "manuals")
+    if settings.EVIDENCE_DIR.startswith("/app"):
+        settings.EVIDENCE_DIR = os.path.join(settings.MANUALS_DIR, "evidence")
+    if settings.REPORTS_DIR.startswith("/app"):
+        settings.REPORTS_DIR = os.path.join(settings.MANUALS_DIR, "reports")
+    if settings.HF_HOME.startswith("/app"):
+        settings.HF_HOME = os.path.join(base_dir, "model_cache")
+
 # Ensure required local storage directories exist (best effort)
 try:
     os.makedirs(settings.MANUALS_DIR, exist_ok=True)
     os.makedirs(settings.EVIDENCE_DIR, exist_ok=True)
     os.makedirs(settings.REPORTS_DIR, exist_ok=True)
-except Exception as e:
+except Exception:
     pass
