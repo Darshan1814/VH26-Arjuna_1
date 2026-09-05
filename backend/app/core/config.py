@@ -14,6 +14,11 @@ class Settings(BaseSettings):
     GROQ_REASONING_MODEL: str = "openai/gpt-oss-120b"
     GROQ_VISION_MODEL: str = "openai/gpt-oss-20b"
 
+    # --- RapidAPI Google Translate 113 Configuration ---
+    RAPIDAPI_TRANSLATE_KEY: str = "0c41dd989fmsh8331390bf41a4cfp14a23ajsn42c4974f6cb0"
+    RAPIDAPI_TRANSLATE_HOST: str = "google-translate113.p.rapidapi.com"
+    RAPIDAPI_TRANSLATE_URL: str = "https://google-translate113.p.rapidapi.com/api/v1/translator"
+
     # --- Serper Web Search ---
     SERPER_API_KEY: str = ""
 

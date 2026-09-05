@@ -1,192 +1,22 @@
-"""Translation API route using Deep Translate RapidAPI with caching and fallback."""
+"""Translation API route using RapidAPI Google Translate 113 with Groq LLM fallback and persistent caching."""
 
+import json
 import logging
-from typing import Dict, List, Union
+import os
+from typing import Any, Dict, List, Union
 import httpx
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
+
+from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-RAPIDAPI_URL = "https://deep-translate1.p.rapidapi.com/language/translate/v2"
-RAPIDAPI_HOST = "deep-translate1.p.rapidapi.com"
-RAPIDAPI_KEY = "0c41dd989fmsh8331390bf41a4cfp14a23ajsn42c4974f6cb0"
-
 # In-memory translation cache to save quota and speed up repeated requests
 # Key: (text, source_lang, target_lang) -> Value: translated_text
 TRANSLATION_CACHE: Dict[tuple, str] = {}
-
-# Built-in translations for UI strings as a resilient fallback
-FALLBACK_DICTIONARY: Dict[str, Dict[str, str]] = {
-    # Spanish (es)
-    "es": {
-        "Machine Troubleshooter": "Solucionador de Problemas de Máquinas",
-        "Chatbot": "Chatbot",
-        "Process Flow": "Flujo del Proceso",
-        "Troubleshooting Assistant": "Asistente de Solución de Problemas",
-        "Ask about error codes, machine issues, or troubleshooting steps": "Pregunte sobre códigos de error, problemas de la máquina o pasos de diagnóstico",
-        "Clear conversation": "Limpiar conversación",
-        "Get diagnostic help from service manuals. Ask about error codes, symptoms, or troubleshooting procedures.": "Obtenga ayuda diagnóstica de los manuales de servicio. Pregunte sobre códigos de error, síntomas o procedimientos.",
-        "What does error E101 mean?": "¿Qué significa el error E101?",
-        "Why is my CNC-X100 overheating?": "¿Por qué se sobrecalienta mi CNC-X100?",
-        "What does E101 mean on PRESS-Z200?": "¿Qué significa E101 en PRESS-Z200?",
-        "Type your question...": "Escriba su pregunta...",
-        "Send": "Enviar",
-        "All Services Are Up and Running!": "¡Todos los servicios están en funcionamiento!",
-        "PDF Manuals": "Manuales en PDF",
-        "Document Processing": "Procesamiento de Documentos",
-        "OCR / Layout Extraction": "OCR / Extracción de Diseño",
-        "Chunking": "División en Fragmentos",
-        "Embeddings (BGE-M3)": "Incrustaciones (BGE-M3)",
-        "Hybrid Retrieval": "Recuperación Híbrida",
-        "Reranking": "Reclasificación",
-        "Evidence Verification": "Verificación de Evidencia",
-        "Response Generation": "Generación de Respuestas",
-        "Citations & Highlights": "Citas y Destacados",
-        "Language": "Idioma",
-        "Select Language": "Seleccionar Idioma",
-        "English": "Inglés",
-        "Spanish": "Español",
-        "French": "Francés",
-        "German": "Alemán",
-        "Hindi": "Hindi",
-        "Japanese": "Japonés",
-        "Chinese": "Chino",
-        "Arabic": "Árabe",
-        "Marathi": "Maratí",
-    },
-    # French (fr)
-    "fr": {
-        "Machine Troubleshooter": "Dépannage de Machines",
-        "Chatbot": "Chatbot",
-        "Process Flow": "Flux de Processus",
-        "Troubleshooting Assistant": "Assistant de Dépannage",
-        "Ask about error codes, machine issues, or troubleshooting steps": "Posez des questions sur les codes d'erreur ou les pannes",
-        "Clear conversation": "Effacer la conversation",
-        "Get diagnostic help from service manuals. Ask about error codes, symptoms, or troubleshooting procedures.": "Obtenez une aide diagnostique à partir des manuels de service.",
-        "What does error E101 mean?": "Que signifie l'erreur E101 ?",
-        "Why is my CNC-X100 overheating?": "Pourquoi ma CNC-X100 surchauffe-t-elle ?",
-        "What does E101 mean on PRESS-Z200?": "Que signifie E101 sur PRESS-Z200 ?",
-        "Type your question...": "Tapez votre question...",
-        "Send": "Envoyer",
-        "PDF Manuals": "Manuels PDF",
-        "Document Processing": "Traitement de Documents",
-        "OCR / Layout Extraction": "OCR / Extraction de Mise en Page",
-        "Chunking": "Découpage",
-        "Embeddings (BGE-M3)": "Plongements (BGE-M3)",
-        "Language": "Langue",
-    },
-    # German (de)
-    "de": {
-        "Machine Troubleshooter": "Maschinen-Fehlerbehebung",
-        "Chatbot": "Chatbot",
-        "Process Flow": "Prozessablauf",
-        "Troubleshooting Assistant": "Fehlerbehebungs-Assistent",
-        "Ask about error codes, machine issues, or troubleshooting steps": "Fragen Sie nach Fehlercodes, Maschinenproblemen oder Diagnoseschritten",
-        "Clear conversation": "Unterhaltung löschen",
-        "Get diagnostic help from service manuals. Ask about error codes, symptoms, or troubleshooting procedures.": "Erhalten Sie Diagnosehilfe aus Servicehandbüchern.",
-        "What does error E101 mean?": "Was bedeutet Fehler E101?",
-        "Why is my CNC-X100 overheating?": "Warum überhitzt meine CNC-X100?",
-        "What does E101 mean on PRESS-Z200?": "Was bedeutet E101 auf PRESS-Z200?",
-        "Type your question...": "Geben Sie Ihre Frage ein...",
-        "Send": "Senden",
-        "PDF Manuals": "PDF-Handbücher",
-        "Document Processing": "Dokumentenverarbeitung",
-        "Language": "Sprache",
-    },
-    # Hindi (hi)
-    "hi": {
-        "Machine Troubleshooter": "मशीन समस्या निवारक",
-        "Chatbot": "चैटबॉट",
-        "Process Flow": "प्रक्रिया प्रवाह",
-        "Troubleshooting Assistant": "समस्या निवारण सहायक",
-        "Ask about error codes, machine issues, or troubleshooting steps": "त्रुटि कोड, मशीन की समस्याओं या समाधान चरणों के बारे में पूछें",
-        "Clear conversation": "बातचीत साफ़ करें",
-        "Get diagnostic help from service manuals. Ask about error codes, symptoms, or troubleshooting procedures.": "सर्विस मैनुअल से नैदानिक सहायता प्राप्त करें। त्रुटि कोड और लक्षणों के बारे में पूछें।",
-        "What does error E101 mean?": "त्रुटि E101 का क्या अर्थ है?",
-        "Why is my CNC-X100 overheating?": "मेरा CNC-X100 अधिक गर्म क्यों हो रहा है?",
-        "What does E101 mean on PRESS-Z200?": "PRESS-Z200 पर E101 का क्या अर्थ है?",
-        "Type your question...": "अपना प्रश्न टाइप करें...",
-        "Send": "भेजें",
-        "PDF Manuals": "पीडीएफ मैनुअल",
-        "Document Processing": "दस्तावेज़ प्रसंस्करण",
-        "OCR / Layout Extraction": "ओसीआर / लेआउट निष्कर्षण",
-        "Chunking": "चंकिंग",
-        "Embeddings (BGE-M3)": "एम्बेडिंग (BGE-M3)",
-        "Language": "भाषा",
-    },
-    # Marathi (mr)
-    "mr": {
-        "Machine Troubleshooter": "मशिन समस्या निवारक",
-        "Chatbot": "चॅटबॉट",
-        "Process Flow": "प्रक्रिया प्रवाह",
-        "Troubleshooting Assistant": "समस्या निवारण सहाय्यक",
-        "Ask about error codes, machine issues, or troubleshooting steps": "त्रुटी कोड किंवा मशिनच्या समस्यांबद्दल विचारा",
-        "Clear conversation": "संभाषण साफ करा",
-        "Get diagnostic help from service manuals. Ask about error codes, symptoms, or troubleshooting procedures.": "सर्व्हिस मॅन्युअलमधून मार्गदर्शन मिळवा.",
-        "What does error E101 mean?": "त्रुटी E101 चा अर्थ काय आहे?",
-        "Why is my CNC-X100 overheating?": "माझे CNC-X100 का तापत आहे?",
-        "What does E101 mean on PRESS-Z200?": "PRESS-Z200 वर E101 चा काय अर्थ आहे?",
-        "Type your question...": "तुमचा प्रश्न टाईप करा...",
-        "Send": "पाठवा",
-        "Language": "भाषा",
-    },
-    # Japanese (ja)
-    "ja": {
-        "Machine Troubleshooter": "機械トラブルシューター",
-        "Chatbot": "チャットボット",
-        "Process Flow": "プロセスフロー",
-        "Troubleshooting Assistant": "トラブルシューティングアシスタント",
-        "Ask about error codes, machine issues, or troubleshooting steps": "エラーコード、機械の問題、または手順について質問してください",
-        "Clear conversation": "会話をクリア",
-        "Get diagnostic help from service manuals. Ask about error codes, symptoms, or troubleshooting procedures.": "サービスマニュアルから診断サポートを受けられます。",
-        "What does error E101 mean?": "エラーE101は何を意味しますか？",
-        "Why is my CNC-X100 overheating?": "CNC-X100が過熱するのはなぜですか？",
-        "What does E101 mean on PRESS-Z200?": "PRESS-Z200のE101はどういう意味ですか？",
-        "Type your question...": "質問を入力...",
-        "Send": "送信",
-        "Language": "言語",
-    },
-    # Chinese (zh)
-    "zh": {
-        "Machine Troubleshooter": "机器故障诊断仪",
-        "Chatbot": "聊天机器人",
-        "Process Flow": "处理流程",
-        "Troubleshooting Assistant": "故障排除助手",
-        "Ask about error codes, machine issues, or troubleshooting steps": "咨询错误代码、机器问题或排除步骤",
-        "Clear conversation": "清除对话",
-        "Get diagnostic help from service manuals. Ask about error codes, symptoms, or troubleshooting procedures.": "从维修手册中获取诊断帮助。",
-        "What does error E101 mean?": "错误 E101 是什么意思？",
-        "Why is my CNC-X100 overheating?": "为什么我的 CNC-X100 过热？",
-        "What does E101 mean on PRESS-Z200?": "PRESS-Z200 上的 E101 是什么意思？",
-        "Type your question...": "输入您的问题...",
-        "Send": "发送",
-        "Language": "语言",
-    },
-    # Arabic (ar)
-    "ar": {
-        "Machine Troubleshooter": "مستكشف أخطاء الماكينة ومصلحها",
-        "Chatbot": "روبوت الدردشة",
-        "Process Flow": "تدفق العمليات",
-        "Troubleshooting Assistant": "مساعد استكشاف الأخطاء",
-        "Ask about error codes, machine issues, or troubleshooting steps": "اسأل عن رموز الأخطاء أو مشاكل الآلة",
-        "Clear conversation": "مسح المحادثة",
-        "Get diagnostic help from service manuals. Ask about error codes, symptoms, or troubleshooting procedures.": "احصل على مساعدة تشخيصية من أدلة الخدمة.",
-        "What does error E101 mean?": "ماذا يعني الخطأ E101؟",
-        "Why is my CNC-X100 overheating?": "لماذا ترتفع درجة حرارة CNC-X100؟",
-        "What does E101 mean on PRESS-Z200?": "ماذا يعني E101 في PRESS-Z200؟",
-        "Type your question...": "اكتب سؤالك...",
-        "Send": "إرسال",
-        "Language": "اللغة",
-    },
-}
-
-
-import json
-import os
-from app.core.config import settings
 
 LANGUAGE_NAMES: Dict[str, str] = {
     "hi": "Hindi", "mr": "Marathi", "bn": "Bengali", "te": "Telugu", "ta": "Tamil",
@@ -206,9 +36,95 @@ LANGUAGE_NAMES: Dict[str, str] = {
     "uz": "Uzbek", "en": "English"
 }
 
+# Built-in translations for core UI strings as resilient fallback
+FALLBACK_DICTIONARY: Dict[str, Dict[str, str]] = {
+    "hi": {
+        "Machine Troubleshooter": "मशीन समस्या निवारक",
+        "Chatbot": "चैटबॉट",
+        "Process Flow": "प्रक्रिया प्रवाह",
+        "What-If Simulator": "व्हाट-इफ सिम्युलेटर",
+        "Image Analysis": "छवि विश्लेषण",
+        "Voice Assistant": "वॉयस असिस्टेंट",
+        "Document Intelligence": "दस्तावेज़ इंटेलिजेंस",
+        "Error Research": "त्रुटि अनुसंधान",
+        "Industrial Diagnostic Assistant": "औद्योगिक निदान सहायक",
+        "Upload Service Manual": "सर्विस मैनुअल अपलोड करें",
+        "Upload Manual": "मैनुअल अपलोड करें",
+        "Select & Upload Manual": "मैनुअल चुनें और अपलोड करें",
+        "Active Knowledge Base": "सक्रिय ज्ञानकोष",
+        "Diagnostic System Online": "निदान प्रणाली ऑनलाइन",
+        "Download PDF Report": "पीडीएफ रिपोर्ट डाउनलोड करें",
+        "View HTML Report": "एचटीएमएल रिपोर्ट देखें",
+        "Run": "चलाएं",
+        "Step": "चरण",
+        "Previous": "पिछला",
+        "Next": "अगला",
+        "Clear": "साफ़ करें",
+        "Mandatory Safety Precautions": "अनिवार्य सुरक्षा सावधानियां",
+        "HIGH Confidence": "उच्च विश्वसनीयता",
+        "MEDIUM Confidence": "मध्यम विश्वसनीयता",
+        "LOW Confidence": "कम विश्वसनीयता",
+    },
+    "mr": {
+        "Machine Troubleshooter": "मशिन समस्या निवारक",
+        "Chatbot": "चॅटबॉट",
+        "Process Flow": "प्रक्रिया प्रवाह",
+        "What-If Simulator": "व्हॉट-इफ सिम्युलेटर",
+        "Image Analysis": "प्रतिमा विश्लेषण",
+        "Voice Assistant": "व्हॉइस असिस्टंट",
+        "Industrial Diagnostic Assistant": "औद्योगिक निदान सहाय्यक",
+        "Upload Service Manual": "सर्व्हिस मॅन्युअल अपलोड करा",
+        "Upload Manual": "मॅन्युअल अपलोड करा",
+        "Active Knowledge Base": "सक्रिय ज्ञानकोष",
+        "Diagnostic System Online": "निदान प्रणाली ऑनलाइन",
+        "Download PDF Report": "पीडीएफ अहवाल डाउनलोड करा",
+        "View HTML Report": "एचटीएमएल अहवाल पहा",
+        "Mandatory Safety Precautions": "अनिवार्य सुरक्षा खबरदारी",
+        "HIGH Confidence": "उच्च विश्वासार्हता",
+    },
+    "es": {
+        "Machine Troubleshooter": "Solucionador de Problemas de Máquinas",
+        "Chatbot": "Chatbot",
+        "Process Flow": "Flujo del Proceso",
+        "What-If Simulator": "Simulador What-If",
+        "Image Analysis": "Análisis de Imágenes",
+        "Industrial Diagnostic Assistant": "Asistente de Diagnóstico Industrial",
+        "Upload Service Manual": "Cargar Manual de Servicio",
+        "Upload Manual": "Cargar Manual",
+        "Diagnostic System Online": "Sistema de Diagnóstico en Línea",
+        "Download PDF Report": "Descargar Informe en PDF",
+        "View HTML Report": "Ver Informe en HTML",
+        "HIGH Confidence": "Alta Confianza",
+    },
+    "fr": {
+        "Machine Troubleshooter": "Dépannage de Machines Industrielles",
+        "Chatbot": "Chatbot",
+        "Process Flow": "Flux de Processus",
+        "Industrial Diagnostic Assistant": "Assistant de Diagnostic Industriel",
+        "Upload Service Manual": "Téléverser le Manuel",
+        "Diagnostic System Online": "Système de Diagnostic en Ligne",
+        "Download PDF Report": "Télécharger le Rapport PDF",
+        "View HTML Report": "Voir le Rapport HTML",
+        "HIGH Confidence": "Confiance Élevée",
+    },
+    "de": {
+        "Machine Troubleshooter": "Industrie-Maschinen-Fehlerbehebung",
+        "Chatbot": "Chatbot",
+        "Process Flow": "Prozessablauf",
+        "Industrial Diagnostic Assistant": "Industrieller Diagnose-Assistent",
+        "Upload Service Manual": "Servicehandbuch hochladen",
+        "Diagnostic System Online": "Diagnosesystem Online",
+        "Download PDF Report": "PDF-Bericht herunterladen",
+        "View HTML Report": "HTML-Bericht anzeigen",
+        "HIGH Confidence": "Hohe Zuverlässigkeit",
+    },
+}
+
 CACHE_FILE = os.path.join(settings.MANUALS_DIR, "translations_cache.json")
 
+
 def load_disk_cache():
+    """Load cached translations from disk file."""
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, "r", encoding="utf-8") as f:
@@ -220,7 +136,9 @@ def load_disk_cache():
         except Exception as e:
             logger.warning(f"Could not load disk translation cache: {e}")
 
+
 def save_disk_cache():
+    """Save in-memory cache to disk."""
     try:
         os.makedirs(os.path.dirname(CACHE_FILE), exist_ok=True)
         serializable = {f"{k[0]}:::{k[1]}:::{k[2]}": v for k, v in TRANSLATION_CACHE.items()}
@@ -229,13 +147,14 @@ def save_disk_cache():
     except Exception as e:
         logger.warning(f"Could not save disk translation cache: {e}")
 
+
 load_disk_cache()
 
 
 class TranslateRequest(BaseModel):
     q: Union[str, List[str]] = Field(..., description="Text or list of texts to translate")
-    source: str = Field(default="en", description="Source language code (e.g. 'en')")
-    target: str = Field(..., description="Target language code (e.g. 'es', 'fr', 'hi')")
+    source: str = Field(default="auto", description="Source language code (default 'auto' or 'en')")
+    target: str = Field(..., description="Target language code (e.g. 'es', 'fr', 'hi', 'vi')")
 
 
 class TranslateResponse(BaseModel):
@@ -243,6 +162,85 @@ class TranslateResponse(BaseModel):
     source: str
     target: str
     provider: str
+
+
+async def call_rapidapi_google_translate_json(
+    texts_dict: Dict[str, str],
+    source: str,
+    target: str,
+) -> Dict[str, str]:
+    """Call Google Translate 113 RapidAPI JSON translator endpoint.
+
+    Endpoint: POST https://google-translate113.p.rapidapi.com/api/v1/translator/json
+    Headers:
+      x-rapidapi-host: google-translate113.p.rapidapi.com
+      x-rapidapi-key: <key>
+    """
+    url = f"{settings.RAPIDAPI_TRANSLATE_URL.rstrip('/')}/json"
+    headers = {
+        "Content-Type": "application/json",
+        "x-rapidapi-host": settings.RAPIDAPI_TRANSLATE_HOST,
+        "x-rapidapi-key": settings.RAPIDAPI_TRANSLATE_KEY,
+    }
+    payload = {
+        "from": source or "auto",
+        "to": target,
+        "protected_paths": [],
+        "common_protected_paths": [],
+        "json": texts_dict,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=6.0) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                trans_data = (
+                    data.get("trans")
+                    or data.get("result")
+                    or data.get("json")
+                    or (data if isinstance(data, dict) and not any(k in data for k in ["message", "error"]) else {})
+                )
+                if isinstance(trans_data, dict) and trans_data:
+                    return {str(k): str(v) for k, v in trans_data.items()}
+            else:
+                logger.debug(f"RapidAPI Google Translate returned {resp.status_code}: {resp.text[:120]}")
+    except Exception as e:
+        logger.debug(f"RapidAPI Google Translate request error: {e}")
+
+    return {}
+
+
+async def call_rapidapi_google_translate_text(
+    text: str,
+    source: str,
+    target: str,
+) -> Optional[str]:
+    """Call Google Translate 113 RapidAPI text translator endpoint."""
+    url = f"{settings.RAPIDAPI_TRANSLATE_URL.rstrip('/')}/text"
+    headers = {
+        "Content-Type": "application/json",
+        "x-rapidapi-host": settings.RAPIDAPI_TRANSLATE_HOST,
+        "x-rapidapi-key": settings.RAPIDAPI_TRANSLATE_KEY,
+    }
+    payload = {
+        "from": source or "auto",
+        "to": target,
+        "text": text,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=4.0) as client:
+            resp = await client.post(url, headers=headers, json=payload)
+            if resp.status_code == 200:
+                data = resp.json()
+                trans = data.get("trans") or data.get("translated_text") or data.get("result")
+                if trans:
+                    return str(trans)
+    except Exception as e:
+        logger.debug(f"RapidAPI text translation error: {e}")
+
+    return None
 
 
 def translate_with_groq_batch(texts: List[str], source: str, target: str) -> List[str]:
@@ -281,44 +279,10 @@ def translate_with_groq_batch(texts: List[str], source: str, target: str) -> Lis
     return [lang_dict.get(t, t) for t in texts]
 
 
-async def call_deep_translate_api(text: str, source: str, target: str) -> str:
-    """Call Deep Translate RapidAPI, with automatic Groq LLM fallback."""
-    headers = {
-        "Content-Type": "application/json",
-        "x-rapidapi-host": RAPIDAPI_HOST,
-        "x-rapidapi-key": RAPIDAPI_KEY,
-    }
-    payload = {"q": text, "source": source, "target": target}
-
-    try:
-        async with httpx.AsyncClient(timeout=4.0) as client:
-            resp = await client.post(RAPIDAPI_URL, headers=headers, json=payload)
-            if resp.status_code == 200:
-                data = resp.json()
-                translated = (
-                    data.get("data", {})
-                    .get("translations", {})
-                    .get("translatedText")
-                )
-                if translated:
-                    return str(translated)
-    except Exception:
-        pass
-
-    # Fallback to local dictionary
-    lang_dict = FALLBACK_DICTIONARY.get(target.lower(), {})
-    if text in lang_dict:
-        return lang_dict[text]
-
-    # Seamless high-accuracy Groq fallback
-    groq_res = translate_with_groq_batch([text], source, target)
-    return groq_res[0] if groq_res else text
-
-
 @router.post("", response_model=TranslateResponse)
 async def translate_text(req: TranslateRequest):
-    """Translate one or multiple texts into target language."""
-    if req.target.lower() == req.source.lower():
+    """Translate one or multiple texts into target language using Google Translate 113 with Groq fallback."""
+    if req.target.lower() in [req.source.lower(), "en" if req.source.lower() == "auto" else ""]:
         return TranslateResponse(
             translated_text=req.q,
             source=req.source,
@@ -326,7 +290,7 @@ async def translate_text(req: TranslateRequest):
             provider="identity",
         )
 
-    # Single string translation
+    # 1. Single string translation
     if isinstance(req.q, str):
         cache_key = (req.q, req.source.lower(), req.target.lower())
         if cache_key in TRANSLATION_CACHE:
@@ -337,25 +301,46 @@ async def translate_text(req: TranslateRequest):
                 provider="cache",
             )
 
-        translated = await call_deep_translate_api(req.q, req.source, req.target)
+        # Check local dictionary
+        lang_dict = FALLBACK_DICTIONARY.get(req.target.lower(), {})
+        if req.q in lang_dict:
+            return TranslateResponse(
+                translated_text=lang_dict[req.q],
+                source=req.source,
+                target=req.target,
+                provider="dictionary",
+            )
+
+        # Attempt RapidAPI Google Translate 113
+        translated = await call_rapidapi_google_translate_text(req.q, req.source, req.target)
+        if not translated:
+            json_res = await call_rapidapi_google_translate_json({"0": req.q}, req.source, req.target)
+            translated = json_res.get("0")
+
+        # Fallback to Groq LLM
+        if not translated or translated.strip() == req.q.strip():
+            groq_res = translate_with_groq_batch([req.q], req.source, req.target)
+            translated = groq_res[0] if groq_res else req.q
+
         if translated and translated.strip() != req.q.strip():
             TRANSLATION_CACHE[cache_key] = translated
             save_disk_cache()
+
         return TranslateResponse(
             translated_text=translated,
             source=req.source,
             target=req.target,
-            provider="groq_or_api",
+            provider="rapidapi_google_or_groq",
         )
 
-    # Batch translation
+    # 2. Batch list translation
     source_lower = req.source.lower()
     target_lower = req.target.lower()
     results: List[str] = [""] * len(req.q)
     uncached_indices: List[int] = []
     uncached_texts: List[str] = []
 
-    # 1. Fill from cache and local dictionary
+    # Step A: Fill from in-memory cache and static dictionary
     lang_dict = FALLBACK_DICTIONARY.get(target_lower, {})
     for idx, item in enumerate(req.q):
         cache_key = (item, source_lower, target_lower)
@@ -368,18 +353,35 @@ async def translate_text(req: TranslateRequest):
             uncached_indices.append(idx)
             uncached_texts.append(item)
 
-    # 2. Batch-translate uncached items via Groq in chunks of 35
+    # Step B: Translate uncached items
     if uncached_texts:
-        CHUNK_SIZE = 35
+        CHUNK_SIZE = 40
         for i in range(0, len(uncached_texts), CHUNK_SIZE):
             chunk_texts = uncached_texts[i:i + CHUNK_SIZE]
             chunk_indices = uncached_indices[i:i + CHUNK_SIZE]
-            translated_chunk = translate_with_groq_batch(chunk_texts, req.source, req.target)
-            for orig_idx, orig_text, trans_text in zip(chunk_indices, chunk_texts, translated_chunk):
-                results[orig_idx] = trans_text
-                # Only cache if actually translated to avoid poisoning cache with raw English
-                if trans_text and trans_text.strip() != orig_text.strip():
-                    TRANSLATION_CACHE[(orig_text, source_lower, target_lower)] = trans_text
+            chunk_dict = {str(j): text for j, text in enumerate(chunk_texts)}
+
+            # 1. Try RapidAPI Google Translate 113 JSON endpoint first
+            rapid_res = await call_rapidapi_google_translate_json(chunk_dict, req.source, req.target)
+
+            # 2. If missing items, fall back to Groq LLM batch
+            missing_texts = []
+            missing_orig_indices = []
+            for j, (orig_idx, orig_text) in enumerate(zip(chunk_indices, chunk_texts)):
+                trans_val = rapid_res.get(str(j))
+                if trans_val and trans_val.strip() and trans_val.strip() != orig_text.strip():
+                    results[orig_idx] = trans_val.strip()
+                    TRANSLATION_CACHE[(orig_text, source_lower, target_lower)] = trans_val.strip()
+                else:
+                    missing_texts.append(orig_text)
+                    missing_orig_indices.append(orig_idx)
+
+            if missing_texts:
+                groq_translated = translate_with_groq_batch(missing_texts, req.source, req.target)
+                for orig_idx, orig_text, trans_text in zip(missing_orig_indices, missing_texts, groq_translated):
+                    results[orig_idx] = trans_text
+                    if trans_text and trans_text.strip() != orig_text.strip():
+                        TRANSLATION_CACHE[(orig_text, source_lower, target_lower)] = trans_text
 
         save_disk_cache()
 
@@ -387,5 +389,5 @@ async def translate_text(req: TranslateRequest):
         translated_text=results,
         source=req.source,
         target=req.target,
-        provider="groq_batch",
+        provider="google_translate113_and_groq",
     )
