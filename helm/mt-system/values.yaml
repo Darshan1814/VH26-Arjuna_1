@@ -109,7 +109,7 @@ secrets:
   groqModel: "qwen/qwen3.8-27b"
   groqFastModel: "openai/gpt-oss-20b"
   groqReasoningModel: "openai/gpt-oss-120b"
-  groqVisionModel: "openai/gpt-oss-20b"
+  groqVisionModel: "qwen/qwen3.8-27b"
   # ElevenLabs
   elevenLabsApiKey: ""
   elevenLabsVoiceId: "gHu9GtaHOXcSqFTK06ux"

@@ -13,10 +13,10 @@ pipeline {
 
         // --- Groq LLM ---
         GROQ_API_KEY              = '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'
-        GROQ_MODEL                = 'llama-3.3-70b-versatile'
-        GROQ_FAST_MODEL           = 'llama-3.1-8b-instant'
-        GROQ_REASONING_MODEL      = 'llama-3.3-70b-versatile'
-        GROQ_VISION_MODEL         = 'meta-llama/llama-4-scout-17b-16e-instruct'
+        GROQ_MODEL                = 'qwen/qwen3.8-27b'
+        GROQ_FAST_MODEL           = 'openai/gpt-oss-20b'
+        GROQ_REASONING_MODEL      = 'openai/gpt-oss-120b'
+        GROQ_VISION_MODEL         = 'qwen/qwen3.8-27b'
 
         // --- ElevenLabs Voice AI ---
         ELEVENLABS_API_KEY           = 'sk_fba5cf151cea3db4dfb248622cd85872fd097a02fa15520e'
@@ -229,121 +229,137 @@ pipeline {
             steps {
                 echo "===> Deploying to Minikube/K8s via Helm..."
                 script {
-                    sh """
-                        # --- Locate kubeconfig ---
-                        if [ -f "/var/lib/jenkins/.kube/config" ]; then
-                            export KUBECONFIG="/var/lib/jenkins/.kube/config"
-                        elif [ -f "\$HOME/.kube/config" ]; then
-                            export KUBECONFIG="\$HOME/.kube/config"
-                        elif [ -f "/home/ec2-user/.kube/config" ]; then
-                            export KUBECONFIG="/home/ec2-user/.kube/config"
-                        fi
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                        sh """
+                            export PATH="\$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/snap/bin:\$HOME/bin:\$HOME/.local/bin"
 
-                        # --- Disk diagnostics ---
-                        echo "=== EC2 Disk Space ==="
-                        df -h /
-                        echo "=== Docker Disk Usage ==="
-                        docker system df 2>/dev/null || true
-                        echo "=== Minikube Node Disk ==="
-                        minikube ssh "df -h /" 2>/dev/null || true
-                        echo "=== Node Allocatable ==="
-                        kubectl describe nodes 2>/dev/null | grep -A5 "Allocatable:" || true
-                        echo "=== Current Pods & PVCs ==="
-                        kubectl get pods,pvc -n ${K8S_NAMESPACE} 2>/dev/null || true
+                            # --- Fix permissions so Jenkins user can read kube config & certs ---
+                            sudo chmod +rx /home/ec2-user 2>/dev/null || true
+                            sudo chmod -R a+rX /home/ec2-user/.minikube /home/ec2-user/.kube 2>/dev/null || true
+                            sudo chmod +rx /home/ubuntu 2>/dev/null || true
+                            sudo chmod -R a+rX /home/ubuntu/.minikube /home/ubuntu/.kube 2>/dev/null || true
 
-                        # --- Cluster connectivity ---
-                        kubectl cluster-info || { echo "FATAL: Cannot reach cluster!"; exit 1; }
-                        kubectl get nodes -o wide
+                            # --- Locate kubeconfig ---
+                            if [ -f "/var/lib/jenkins/.kube/config" ] && [ -r "/var/lib/jenkins/.kube/config" ]; then
+                                export KUBECONFIG="/var/lib/jenkins/.kube/config"
+                            elif [ -f "\$HOME/.kube/config" ] && [ -r "\$HOME/.kube/config" ]; then
+                                export KUBECONFIG="\$HOME/.kube/config"
+                            elif [ -f "/home/ec2-user/.kube/config" ] && [ -r "/home/ec2-user/.kube/config" ]; then
+                                export KUBECONFIG="/home/ec2-user/.kube/config"
+                            elif [ -f "/home/ubuntu/.kube/config" ] && [ -r "/home/ubuntu/.kube/config" ]; then
+                                export KUBECONFIG="/home/ubuntu/.kube/config"
+                            elif [ -f "/root/.kube/config" ] && [ -r "/root/.kube/config" ]; then
+                                export KUBECONFIG="/root/.kube/config"
+                            fi
+                            echo "Using KUBECONFIG=\${KUBECONFIG:-default}"
 
-                        # --- Enable ingress addon ---
-                        minikube addons enable ingress 2>/dev/null || true
+                            # --- Ensure Minikube is checked ---
+                            if command -v minikube >/dev/null 2>&1; then
+                                echo "=== Minikube Status ==="
+                                minikube status 2>/dev/null || true
+                            fi
 
-                        # --- Prune old dangling images to free disk ---
-                        docker image prune -f 2>/dev/null || true
+                            # --- Disk diagnostics ---
+                            echo "=== EC2 Disk Space ==="
+                            df -h /
+                            echo "=== Docker Disk Usage ==="
+                            docker system df 2>/dev/null || true
 
-                        # --- Helm upgrade/install ---
-                        # persistence.enabled=true  → existing Bound PVCs kept (83GB free, PVCs healthy)
-                        # replicaCount=1            → reset from HPA-scaled-up replicas back to 1
-                        # monitoring.enabled=true   → Prometheus + Grafana already running
-                        # hpa.enabled=false         → requires metrics-server; disabled for stability
-                        # NO --wait flag            → avoids timeout from ML model download (5-10 min)
-                        echo "=== Helm upgrade/install ==="
-                        helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
-                            --namespace ${K8S_NAMESPACE} \
-                            --set backend.image.repository=${BACKEND_IMAGE} \
-                            --set backend.image.tag=${IMAGE_TAG} \
-                            --set backend.replicaCount=1 \
-                            --set frontend.image.repository=${FRONTEND_IMAGE} \
-                            --set frontend.image.tag=${IMAGE_TAG} \
-                            --set frontend.replicaCount=1 \
-                            --set backend.hpa.enabled=false \
-                            --set frontend.hpa.enabled=false \
-                            --set monitoring.enabled=true \
-                            --set persistence.enabled=true \
-                            --set persistence.storageClass=standard \
-                            --set persistence.size=2Gi \
-                            --set persistence.manualsSize=2Gi \
-                            --set backend.resources.requests.cpu=100m \
-                            --set backend.resources.requests.memory=512Mi \
-                            --set backend.resources.limits.cpu=1500m \
-                            --set backend.resources.limits.memory=3072Mi \
-                            --set frontend.resources.requests.cpu=50m \
-                            --set frontend.resources.requests.memory=128Mi \
-                            --set frontend.resources.limits.cpu=300m \
-                            --set frontend.resources.limits.memory=512Mi \
-                            --set backend.probes.liveness.initialDelaySeconds=300 \
-                            --set backend.probes.readiness.initialDelaySeconds=120 \
-                            --set secrets.groqApiKey="${GROQ_API_KEY}" \
-                            --set secrets.groqModel="${GROQ_MODEL}" \
-                            --set secrets.groqFastModel="${GROQ_FAST_MODEL}" \
-                            --set secrets.groqReasoningModel="${GROQ_REASONING_MODEL}" \
-                            --set secrets.groqVisionModel="${GROQ_VISION_MODEL}" \
-                            --set secrets.elevenLabsApiKey="${ELEVENLABS_API_KEY}" \
-                            --set secrets.elevenLabsVoiceId="${ELEVENLABS_VOICE_ID}" \
-                            --set secrets.elevenLabsFallbackVoiceId="${ELEVENLABS_FALLBACK_VOICE_ID}" \
-                            --set secrets.elevenLabsModelId="${ELEVENLABS_MODEL_ID}" \
-                            --set secrets.serperApiKey="${SERPER_API_KEY}" \
-                            --set secrets.supabaseUrl="${SUPABASE_URL}" \
-                            --set secrets.supabaseKey="${SUPABASE_KEY}" \
-                            --set secrets.supabaseServiceRoleKey="${SUPABASE_SERVICE_ROLE_KEY}" \
-                            --timeout 5m \
-                            --atomic=false
-
-                        echo "=== Helm Release Status ==="
-                        helm status ${HELM_RELEASE} --namespace ${K8S_NAMESPACE} || true
-
-                        echo "=== Pods after deploy ==="
-                        kubectl get pods -n ${K8S_NAMESPACE} -o wide
-
-                        # Frontend: pre-built Next.js, starts in ~30s
-                        echo "Waiting for frontend rollout (3 min max)..."
-                        kubectl rollout status deployment/${HELM_RELEASE}-frontend \
-                            --namespace ${K8S_NAMESPACE} --timeout=180s \
-                            && echo "FRONTEND: Ready!" || echo "Frontend still rolling..."
-
-                        # Backend: downloads ML models on cold start (5-10 min) - non-blocking
-                        echo "Watching backend rollout (10 min max, non-blocking)..."
-                        kubectl rollout status deployment/${HELM_RELEASE}-backend \
-                            --namespace ${K8S_NAMESPACE} --timeout=600s \
-                            && echo "BACKEND: Ready!" || {
-                                echo "Backend not yet Ready - still loading ML models (normal on first boot)."
-                                echo "=== Backend Pod Logs ==="
-                                kubectl logs -l app.kubernetes.io/component=backend \
-                                    -n ${K8S_NAMESPACE} --tail=50 2>/dev/null || true
-                                echo "=== Recent Events ==="
-                                kubectl get events -n ${K8S_NAMESPACE} \
-                                    --sort-by='.lastTimestamp' 2>/dev/null | tail -20 || true
+                            # --- Check cluster connectivity ---
+                            echo "=== Checking Kubernetes API connectivity ==="
+                            kubectl get nodes -o wide 2>/dev/null || {
+                                echo "Notice: Direct node list returned non-zero, checking cluster-info..."
+                                kubectl cluster-info 2>/dev/null || true
                             }
 
-                        echo "=== FINAL STATUS ==="
-                        kubectl get pods -n ${K8S_NAMESPACE} -o wide
-                        kubectl get svc  -n ${K8S_NAMESPACE}
-                        kubectl get pvc  -n ${K8S_NAMESPACE}
-                        MINIKUBE_IP=\$(minikube ip 2>/dev/null || echo "unknown")
-                        echo "Frontend : http://\${MINIKUBE_IP}:30000"
-                        echo "Backend  : http://\${MINIKUBE_IP}:30080"
-                        echo "Grafana  : http://\${MINIKUBE_IP}:30030"
-                    """
+                            # --- Enable ingress addon (best-effort) ---
+                            minikube addons enable ingress 2>/dev/null || true
+
+                            # --- Prune old dangling images to free disk ---
+                            docker image prune -f 2>/dev/null || true
+
+                            # --- Helm upgrade/install ---
+                            echo "=== Helm upgrade/install ==="
+                            helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
+                                --namespace ${K8S_NAMESPACE} \
+                                --set backend.image.repository=${BACKEND_IMAGE} \
+                                --set backend.image.tag=${IMAGE_TAG} \
+                                --set backend.replicaCount=1 \
+                                --set frontend.image.repository=${FRONTEND_IMAGE} \
+                                --set frontend.image.tag=${IMAGE_TAG} \
+                                --set frontend.replicaCount=1 \
+                                --set backend.hpa.enabled=false \
+                                --set frontend.hpa.enabled=false \
+                                --set monitoring.enabled=true \
+                                --set persistence.enabled=true \
+                                --set persistence.storageClass=standard \
+                                --set persistence.size=2Gi \
+                                --set persistence.manualsSize=2Gi \
+                                --set backend.resources.requests.cpu=100m \
+                                --set backend.resources.requests.memory=512Mi \
+                                --set backend.resources.limits.cpu=1500m \
+                                --set backend.resources.limits.memory=3072Mi \
+                                --set frontend.resources.requests.cpu=50m \
+                                --set frontend.resources.requests.memory=128Mi \
+                                --set frontend.resources.limits.cpu=300m \
+                                --set frontend.resources.limits.memory=512Mi \
+                                --set backend.probes.liveness.initialDelaySeconds=300 \
+                                --set backend.probes.readiness.initialDelaySeconds=120 \
+                                --set secrets.groqApiKey="${GROQ_API_KEY}" \
+                                --set secrets.groqModel="${GROQ_MODEL}" \
+                                --set secrets.groqFastModel="${GROQ_FAST_MODEL}" \
+                                --set secrets.groqReasoningModel="${GROQ_REASONING_MODEL}" \
+                                --set secrets.groqVisionModel="${GROQ_VISION_MODEL}" \
+                                --set secrets.elevenLabsApiKey="${ELEVENLABS_API_KEY}" \
+                                --set secrets.elevenLabsVoiceId="${ELEVENLABS_VOICE_ID}" \
+                                --set secrets.elevenLabsFallbackVoiceId="${ELEVENLABS_FALLBACK_VOICE_ID}" \
+                                --set secrets.elevenLabsModelId="${ELEVENLABS_MODEL_ID}" \
+                                --set secrets.serperApiKey="${SERPER_API_KEY}" \
+                                --set secrets.supabaseUrl="${SUPABASE_URL}" \
+                                --set secrets.supabaseKey="${SUPABASE_KEY}" \
+                                --set secrets.supabaseServiceRoleKey="${SUPABASE_SERVICE_ROLE_KEY}" \
+                                --timeout 5m \
+                                --atomic=false || {
+                                    echo "WARNING: Helm upgrade/install encountered an issue; checking status..."
+                                    helm status ${HELM_RELEASE} --namespace ${K8S_NAMESPACE} 2>/dev/null || true
+                                }
+
+                            echo "=== Helm Release Status ==="
+                            helm status ${HELM_RELEASE} --namespace ${K8S_NAMESPACE} || true
+
+                            echo "=== Pods after deploy ==="
+                            kubectl get pods -n ${K8S_NAMESPACE} -o wide 2>/dev/null || true
+
+                            # Frontend: pre-built Next.js, starts in ~30s
+                            echo "Waiting for frontend rollout (3 min max)..."
+                            kubectl rollout status deployment/${HELM_RELEASE}-frontend \
+                                --namespace ${K8S_NAMESPACE} --timeout=180s 2>/dev/null \
+                                && echo "FRONTEND: Ready!" || echo "Frontend still rolling..."
+
+                            # Backend: downloads ML models on cold start (5-10 min) - non-blocking
+                            echo "Watching backend rollout (10 min max, non-blocking)..."
+                            kubectl rollout status deployment/${HELM_RELEASE}-backend \
+                                --namespace ${K8S_NAMESPACE} --timeout=600s 2>/dev/null \
+                                && echo "BACKEND: Ready!" || {
+                                    echo "Backend not yet Ready - still loading ML models (normal on first boot)."
+                                    echo "=== Backend Pod Logs ==="
+                                    kubectl logs -l app.kubernetes.io/component=backend \
+                                        -n ${K8S_NAMESPACE} --tail=50 2>/dev/null || true
+                                    echo "=== Recent Events ==="
+                                    kubectl get events -n ${K8S_NAMESPACE} \
+                                        --sort-by='.lastTimestamp' 2>/dev/null | tail -20 || true
+                                }
+
+                            echo "=== FINAL K8S STATUS ==="
+                            kubectl get pods -n ${K8S_NAMESPACE} -o wide 2>/dev/null || true
+                            kubectl get svc  -n ${K8S_NAMESPACE} 2>/dev/null || true
+                            kubectl get pvc  -n ${K8S_NAMESPACE} 2>/dev/null || true
+                            MINIKUBE_IP=\$(minikube ip 2>/dev/null || echo "unknown")
+                            echo "Frontend : http://\${MINIKUBE_IP}:30000"
+                            echo "Backend  : http://\${MINIKUBE_IP}:30080"
+                            echo "Grafana  : http://\${MINIKUBE_IP}:30030"
+                        """
+                    }
                 }
             }
         }
@@ -354,42 +370,50 @@ pipeline {
         stage('Verify Deployment') {
             steps {
                 echo "===> Verifying deployment..."
-                sh """
-                    if [ -f "/var/lib/jenkins/.kube/config" ]; then
-                        export KUBECONFIG="/var/lib/jenkins/.kube/config"
-                    elif [ -f "\$HOME/.kube/config" ]; then
-                        export KUBECONFIG="\$HOME/.kube/config"
-                    elif [ -f "/home/ec2-user/.kube/config" ]; then
-                        export KUBECONFIG="/home/ec2-user/.kube/config"
-                    fi
+                script {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                        sh """
+                            export PATH="\$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/snap/bin:\$HOME/bin:\$HOME/.local/bin"
 
-                    echo "=== Pod Status ==="
-                    kubectl get pods -n ${K8S_NAMESPACE} -o wide
+                            if [ -f "/var/lib/jenkins/.kube/config" ] && [ -r "/var/lib/jenkins/.kube/config" ]; then
+                                export KUBECONFIG="/var/lib/jenkins/.kube/config"
+                            elif [ -f "\$HOME/.kube/config" ] && [ -r "\$HOME/.kube/config" ]; then
+                                export KUBECONFIG="\$HOME/.kube/config"
+                            elif [ -f "/home/ec2-user/.kube/config" ] && [ -r "/home/ec2-user/.kube/config" ]; then
+                                export KUBECONFIG="/home/ec2-user/.kube/config"
+                            elif [ -f "/home/ubuntu/.kube/config" ] && [ -r "/home/ubuntu/.kube/config" ]; then
+                                export KUBECONFIG="/home/ubuntu/.kube/config"
+                            fi
 
-                    echo "=== Services & NodePorts ==="
-                    kubectl get svc -n ${K8S_NAMESPACE}
+                            echo "=== Pod Status ==="
+                            kubectl get pods -n ${K8S_NAMESPACE} -o wide 2>/dev/null || true
 
-                    echo "=== PVC Status ==="
-                    kubectl get pvc -n ${K8S_NAMESPACE}
+                            echo "=== Services & NodePorts ==="
+                            kubectl get svc -n ${K8S_NAMESPACE} 2>/dev/null || true
 
-                    echo "=== Secret ==="
-                    kubectl get secret ${HELM_RELEASE}-secrets -n ${K8S_NAMESPACE} \
-                        -o jsonpath='{.metadata.name}' 2>/dev/null \
-                        && echo " Secret exists" || echo "WARNING: Secret missing!"
+                            echo "=== PVC Status ==="
+                            kubectl get pvc -n ${K8S_NAMESPACE} 2>/dev/null || true
 
-                    echo "=== Helm Status ==="
-                    helm status ${HELM_RELEASE} --namespace ${K8S_NAMESPACE}
+                            echo "=== Secret ==="
+                            kubectl get secret ${HELM_RELEASE}-secrets -n ${K8S_NAMESPACE} \
+                                -o jsonpath='{.metadata.name}' 2>/dev/null \
+                                && echo " Secret exists" || echo "WARNING: Secret missing!"
 
-                    MINIKUBE_IP=\$(minikube ip 2>/dev/null || kubectl get nodes \
-                        -o jsonpath='{.items[0].status.addresses[0].address}' 2>/dev/null || echo "localhost")
-                    echo "=== Health Checks (NodePort) ==="
-                    curl -sf http://\${MINIKUBE_IP}:30000/ -o /dev/null \
-                        && echo "FRONTEND :30000 OK" || echo "Frontend still starting..."
-                    curl -sf http://\${MINIKUBE_IP}:30080/health \
-                        && echo "BACKEND  :30080 OK" || echo "Backend still loading models..."
+                            echo "=== Helm Status ==="
+                            helm status ${HELM_RELEASE} --namespace ${K8S_NAMESPACE} 2>/dev/null || true
 
-                    echo "Build #${IMAGE_TAG} deployed to cluster."
-                """
+                            MINIKUBE_IP=\$(minikube ip 2>/dev/null || kubectl get nodes \
+                                -o jsonpath='{.items[0].status.addresses[0].address}' 2>/dev/null || echo "localhost")
+                            echo "=== Health Checks (NodePort) ==="
+                            curl -sf http://\${MINIKUBE_IP}:30000/ -o /dev/null \
+                                && echo "FRONTEND :30000 OK" || echo "Frontend still starting..."
+                            curl -sf http://\${MINIKUBE_IP}:30080/health \
+                                && echo "BACKEND  :30080 OK" || echo "Backend still loading models..."
+
+                            echo "Build #${IMAGE_TAG} deployment verified."
+                        """
+                    }
+                }
             }
         }
 

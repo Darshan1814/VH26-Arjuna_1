@@ -67,19 +67,32 @@ class OpenAIClient:
         model: Optional[str] = None,
     ) -> str:
         """Execute a chat completion with model fallback, optimized for Groq and OpenAI."""
+        has_image = any(
+            isinstance(msg.get("content"), list) and any(
+                isinstance(item, dict) and item.get("type") == "image_url"
+                for item in msg.get("content", [])
+            )
+            for msg in messages if isinstance(msg, dict)
+        )
+
         if settings.GROQ_API_KEY:
-            preferred = model or settings.GROQ_REASONING_MODEL or settings.GROQ_MODEL
+            preferred = model or (settings.GROQ_VISION_MODEL if has_image else (settings.GROQ_REASONING_MODEL or settings.GROQ_MODEL))
             candidate_models = []
-            # Only use real Groq-supported model IDs
-            for m in [
-                preferred,
-                "llama-3.3-70b-versatile",
-                "llama-3.1-70b-versatile",
-                "llama-3.1-8b-instant",
-                "gemma2-9b-it",
-            ]:
-                if m and m not in candidate_models:
-                    candidate_models.append(m)
+            if has_image:
+                # Models that support vision/image inputs on Groq
+                for m in [preferred, "qwen/qwen3.8-27b", "qwen/qwen3.6-27b"]:
+                    if m and m not in candidate_models:
+                        candidate_models.append(m)
+            else:
+                for m in [
+                    preferred,
+                    "qwen/qwen3.8-27b",
+                    "openai/gpt-oss-120b",
+                    "openai/gpt-oss-20b",
+                    "groq/compound",
+                ]:
+                    if m and m not in candidate_models:
+                        candidate_models.append(m)
         else:
             candidate_models = [model] if model else ["gpt-5.5"]
             for fallback in [settings.MODEL_GEN, settings.AZURE_OPENAI_DEPLOYMENT, "gpt-5.4", "gpt-5-mini", "gpt-4o"]:

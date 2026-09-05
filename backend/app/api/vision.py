@@ -61,6 +61,8 @@ class ImageAnalysisResponse(BaseModel):
 def _extract_json_from_text(text: str) -> dict:
     """Robustly extract JSON dict from LLM text response."""
     text = text.strip()
+    # Strip thinking tags from reasoning models (e.g. Qwen 3.6/3.8)
+    text = re.sub(r"<think>[\s\S]*?</think>", "", text).strip()
 
     # Try direct parse first
     try:
@@ -99,18 +101,27 @@ async def groq_vision_identify(
     llm,
 ) -> dict:
     """
-    Send raw image to Groq Vision and extract machine identity + fault information.
-    Uses vision_completion() which correctly handles multimodal Groq API calls.
+    Send optimized image to Groq Vision and extract machine identity + fault information.
+    Downscales image to max 768x768 to minimize token usage and prevent rate-limiting.
     """
-    # Convert to base64
-    ext = (filename.rsplit(".", 1)[-1] if "." in filename else "jpg").lower()
-    mime_map = {
-        "jpg": "image/jpeg", "jpeg": "image/jpeg",
-        "png": "image/png", "webp": "image/webp",
-        "gif": "image/gif", "bmp": "image/png",
-    }
-    mime_type = mime_map.get(ext, "image/jpeg")
-    image_b64 = base64.b64encode(content).decode("utf-8")
+    # Downscale and optimize image for vision model
+    try:
+        pil_img = Image.open(io.BytesIO(content)).convert("RGB")
+        pil_img.thumbnail((768, 768), Image.Resampling.LANCZOS)
+        buf = io.BytesIO()
+        pil_img.save(buf, format="JPEG", quality=85, optimize=True)
+        image_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+        mime_type = "image/jpeg"
+    except Exception as img_err:
+        logger.warning(f"Image optimization error: {img_err}, using raw bytes")
+        image_b64 = base64.b64encode(content).decode("utf-8")
+        ext = (filename.rsplit(".", 1)[-1] if "." in filename else "jpg").lower()
+        mime_map = {
+            "jpg": "image/jpeg", "jpeg": "image/jpeg",
+            "png": "image/png", "webp": "image/webp",
+            "gif": "image/gif", "bmp": "image/png",
+        }
+        mime_type = mime_map.get(ext, "image/jpeg")
 
     hint_ctx = ""
     if machine_hint and machine_hint.strip():
@@ -122,24 +133,23 @@ async def groq_vision_identify(
 Carefully examine this image and identify EVERYTHING visible.{hint_ctx}
 
 Look for:
-- Brand/manufacturer name (on logo, badge, nameplate, or label)
-- Machine type (washing machine, sewing machine, CNC machine, VFD drive, refrigerator, AC unit, robot, etc.)
-- Model number (on label or display)
-- ANY error/fault code on the display (e.g. F21, E01, ALARM 3, ERR-04, A011)
-- ALL text visible on display panels, buttons, or labels
-- Physical condition: LED colors, damage, wear
+- Brand/manufacturer name (look closely at logo badges, nameplates, text on the machine body)
+- Machine type (e.g. Industrial Sewing Machine, Washing Machine, CNC Mill, VFD Drive, Robotic Arm, etc.)
+- Model number if visible on machine body or rating plate
+- ANY error/fault code shown on any digital/LED/LCD screen (e.g. E01, F21, ALARM-3, ERR-04)
+- ALL text visible on display panels, status indicators, or labels
 
 Return ONLY a JSON object with these exact fields (no extra text, no markdown):
 {{
   "brand": "exact brand name or null",
   "machine_type": "type of machine",
   "model": "model number or null",
-  "full_machine_name": "Brand + Type + Model (e.g. Whirlpool Front Load Washing Machine WFW5000FW, or Juki DDL-8700 Industrial Sewing Machine)",
-  "error_code": "EXACT code on display (e.g. F21, E3, ALARM-5) or null",
-  "display_text": "all text visible on any display or label",
-  "visible_symptoms": "physical observations: LED state, damage, component condition",
-  "fault_description": "what this error code means for this specific machine",
-  "confidence": 0.9
+  "full_machine_name": "Brand + Model + Type (e.g. Whirlpool Washing Machine or Juki DDL-8700 Industrial Sewing Machine)",
+  "error_code": "EXACT error code on display or null",
+  "display_text": "all text visible on display or panel",
+  "visible_symptoms": "physical observations: LED state, component condition",
+  "fault_description": "what this specific error code means for this machine",
+  "confidence": 0.95
 }}
 """
 
