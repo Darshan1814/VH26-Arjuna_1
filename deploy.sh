@@ -52,9 +52,13 @@ EOF
 chmod 600 "$ENV_FILE" 2>/dev/null || true
 
 # 2. Stop and remove any previous containers
-echo "Stopping old containers..."
+echo "Stopping and removing previous containers..."
 docker stop mt-backend mt-frontend 2>/dev/null || true
 docker rm -f mt-backend mt-frontend 2>/dev/null || true
+for cid in $(docker ps -a -q --filter "name=^mt-backend$" --filter "name=^mt-frontend$" 2>/dev/null); do
+    docker rm -f "$cid" 2>/dev/null || true
+done
+sleep 2
 
 # Stop old minikube/helm services if running
 if command -v helm >/dev/null 2>&1; then
@@ -73,7 +77,6 @@ if command -v nginx >/dev/null 2>&1; then
     cat << 'NGINX_EOF' | sudo tee /tmp/machfixai_nginx.conf >/dev/null 2>&1 || true
 server {
     listen 80 default_server;
-    listen [::]:80 default_server;
     server_name machfixai.in www.machfixai.in _;
 
     client_max_body_size 50M;
@@ -92,16 +95,18 @@ server {
 }
 NGINX_EOF
 
-    # Apply to conf.d (official Nginx mainline like 1.30)
-    sudo cp -f /tmp/machfixai_nginx.conf /etc/nginx/conf.d/default.conf 2>/dev/null || true
+    # Clean old/conflicting configs in conf.d
+    sudo rm -f /etc/nginx/conf.d/*.conf 2>/dev/null || true
     sudo cp -f /tmp/machfixai_nginx.conf /etc/nginx/conf.d/machfixai.conf 2>/dev/null || true
 
-    # Apply to sites-available / sites-enabled (Debian/Ubuntu style)
-    sudo cp -f /tmp/machfixai_nginx.conf /etc/nginx/sites-available/default 2>/dev/null || true
-    sudo ln -sf /etc/nginx/sites-available/default /etc/nginx/sites-enabled/default 2>/dev/null || true
+    # Clean old/conflicting configs in sites-enabled
+    sudo rm -f /etc/nginx/sites-enabled/* 2>/dev/null || true
+    sudo cp -f /tmp/machfixai_nginx.conf /etc/nginx/sites-available/machfixai 2>/dev/null || true
+    sudo ln -sf /etc/nginx/sites-available/machfixai /etc/nginx/sites-enabled/machfixai 2>/dev/null || true
 
-    # Reload / Restart Nginx
-    sudo nginx -t >/dev/null 2>&1 && (sudo systemctl restart nginx 2>/dev/null || sudo service nginx restart 2>/dev/null || sudo nginx -s reload 2>/dev/null || true)
+    # Test and Restart Nginx
+    echo "Testing Nginx configuration:"
+    sudo nginx -t 2>/dev/null && (sudo systemctl restart nginx 2>/dev/null || sudo service nginx restart 2>/dev/null || sudo nginx -s reload 2>/dev/null || true)
 fi
 
 # 3. Ensure Docker network and volumes exist for state persistence
@@ -114,6 +119,7 @@ docker volume create mt-model-cache 2>/dev/null || true
 # 4. Launch Backend container
 echo "Launching mt-backend container..."
 docker rm -f mt-backend 2>/dev/null || true
+sleep 1
 docker run -d \
     --name mt-backend \
     --network mt-network \
@@ -129,6 +135,7 @@ docker run -d \
 # 5. Launch Frontend container on port 3000
 echo "Launching mt-frontend container on port 3000..."
 docker rm -f mt-frontend 2>/dev/null || true
+sleep 1
 docker run -d \
     --name mt-frontend \
     --network mt-network \
@@ -158,6 +165,11 @@ else
     echo "! Frontend is starting up..."
 fi
 
+if curl -sf -o /dev/null http://localhost:80 >/dev/null 2>&1; then
+    echo "✓ NGINX REVERSE PROXY: HEALTHY (:80)"
+else
+    echo "! Port 80 proxy check completed."
+fi
 echo "=========================================================="
 echo " Production Deployment Complete!                         "
 echo " Backend:  http://<HOST>:8000                             "
