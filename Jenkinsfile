@@ -258,71 +258,58 @@ pipeline {
                             export KUBECONFIG="/home/ec2-user/.kube/config"
                         fi
 
-                        # ============================================================
-                        # DISK & VOLUME DIAGNOSTICS — always shown so you can see
-                        # exactly how much space is available before deploying
-                        # ============================================================
-                        echo "=========================================="
-                        echo "  EC2 HOST DISK SPACE"
-                        echo "=========================================="
-                        df -hT                          # all filesystems + types
-                        echo ""
-                        echo "--- Largest directories (top 10) ---"
-                        du -sh /* 2>/dev/null | sort -rh | head -10 || true
-                        echo ""
-                        echo "--- Docker disk usage ---"
+                        # ---- Quick disk + cluster diagnostics ----
+                        echo "=== Disk Space ==="
+                        df -h / /var 2>/dev/null || df -h
+                        echo "=== Docker Disk ==="
                         docker system df 2>/dev/null || true
-                        echo ""
-                        echo "--- Minikube VM disk (inside the node) ---"
-                        minikube ssh "df -h" 2>/dev/null || true
-                        echo ""
-                        echo "--- Kubernetes Node Capacity & Allocatable ---"
-                        kubectl describe nodes 2>/dev/null | grep -A8 "Capacity:" || true
-                        kubectl describe nodes 2>/dev/null | grep -A8 "Allocatable:" || true
-                        kubectl describe nodes 2>/dev/null | grep -A8 "Allocated resources:" || true
-                        echo "=========================================="
+                        echo "=== Minikube Node Disk ==="
+                        minikube ssh "df -h /" 2>/dev/null || true
+                        echo "=== K8s Node Allocatable ==="
+                        kubectl describe nodes 2>/dev/null | grep -A5 "Allocatable:" || true
+                        echo "=== Current Pods ==="
+                        kubectl get pods,pvc -n ${K8S_NAMESPACE} -o wide 2>/dev/null || true
 
-                        # ---- Quick cluster connectivity check ----
-                        kubectl cluster-info || { echo "FATAL: Cannot reach k8s cluster!"; exit 1; }
-                        kubectl get nodes -o wide
+                        # ---- Cluster connectivity ----
+                        kubectl cluster-info || { echo "FATAL: Cannot reach cluster!"; exit 1; }
 
-                        # ---- Minikube addons (best-effort) ----
-                        minikube addons enable ingress 2>/dev/null || true
-
-                        # ---- Ensure namespace exists ----
-                        kubectl create namespace ${K8S_NAMESPACE} 2>/dev/null || true
-
-                        # ---- Clean dangling docker images to free disk ----
-                        echo "Freeing disk: pruning unused Docker images/build cache..."
+                        # ---- Prune old dangling images (best-effort) ----
                         docker image prune -f 2>/dev/null || true
-                        docker builder prune -f 2>/dev/null || true
 
-                        # ============================================================
-                        # HELM DEPLOY — ultra-minimal resource profile
-                        #   persistence.enabled=false  → uses emptyDir (zero disk needed)
-                        #   monitoring.enabled=false   → no Prometheus/Grafana
-                        #   hpa.enabled=false          → no metrics-server needed
-                        #   CPU/memory requests kept tiny so it fits any node
-                        # ============================================================
-                        echo "Running Helm upgrade/install (minimal mode)..."
+                        # ---- Helm upgrade/install ----
+                        # Key decisions based on current cluster state (83GB free, PVCs Bound):
+                        #   persistence.enabled=true   → PVCs already exist and are Bound, keep them
+                        #   persistence.storageClass=standard → Minikube default StorageClass
+                        #   backend.replicaCount=1     → Reset from HPA-scaled 4 back to 1
+                        #   monitoring.enabled=true    → Prometheus+Grafana already running, keep them
+                        #   hpa.enabled=false          → HPA needs metrics-server; disable for stability
+                        #   NO --wait                  → Avoids timeout from ML model download
+                        echo "=== Helm upgrade/install ==="
                         helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \\
                             --namespace ${K8S_NAMESPACE} \\
                             --set backend.image.repository=${BACKEND_IMAGE} \\
                             --set backend.image.tag=${IMAGE_TAG} \\
+                            --set backend.replicaCount=1 \\
                             --set frontend.image.repository=${FRONTEND_IMAGE} \\
                             --set frontend.image.tag=${IMAGE_TAG} \\
+                            --set frontend.replicaCount=1 \\
                             --set backend.hpa.enabled=false \\
                             --set frontend.hpa.enabled=false \\
-                            --set monitoring.enabled=false \\
-                            --set persistence.enabled=false \\
-                            --set backend.resources.requests.cpu=50m \\
-                            --set backend.resources.requests.memory=256Mi \\
-                            --set backend.resources.limits.cpu=1000m \\
-                            --set backend.resources.limits.memory=2048Mi \\
-                            --set frontend.resources.requests.cpu=20m \\
-                            --set frontend.resources.requests.memory=64Mi \\
+                            --set monitoring.enabled=true \\
+                            --set persistence.enabled=true \\
+                            --set persistence.storageClass=standard \\
+                            --set persistence.size=2Gi \\
+                            --set persistence.manualsSize=2Gi \\
+                            --set backend.resources.requests.cpu=100m \\
+                            --set backend.resources.requests.memory=512Mi \\
+                            --set backend.resources.limits.cpu=1500m \\
+                            --set backend.resources.limits.memory=3072Mi \\
+                            --set frontend.resources.requests.cpu=50m \\
+                            --set frontend.resources.requests.memory=128Mi \\
                             --set frontend.resources.limits.cpu=300m \\
-                            --set frontend.resources.limits.memory=256Mi \\
+                            --set frontend.resources.limits.memory=512Mi \\
+                            --set backend.probes.liveness.initialDelaySeconds=300 \\
+                            --set backend.probes.readiness.initialDelaySeconds=120 \\
                             --set secrets.groqApiKey="${GROQ_API_KEY}" \\
                             --set secrets.groqModel="${GROQ_MODEL}" \\
                             --set secrets.groqFastModel="${GROQ_FAST_MODEL}" \\
@@ -339,36 +326,46 @@ pipeline {
                             --timeout 5m \\
                             --atomic=false
 
-                        echo "Helm applied. Release status:"
+                        echo "=== Helm Status ==="
                         helm status ${HELM_RELEASE} --namespace ${K8S_NAMESPACE} || true
 
-                        echo "--- Pods after deploy ---"
+                        echo "=== Pods after Helm apply ==="
                         kubectl get pods -n ${K8S_NAMESPACE} -o wide
 
-                        # ---- Frontend rollout (fast, pre-built image) ----
-                        echo "Waiting for frontend rollout (max 3 min)..."
+                        # ---- Frontend rollout (pre-built, starts fast) ----
+                        echo "Waiting for frontend rollout (3 min max)..."
                         kubectl rollout status deployment/${HELM_RELEASE}-frontend \\
-                            --namespace ${K8S_NAMESPACE} --timeout=180s || true
+                            --namespace ${K8S_NAMESPACE} --timeout=180s \\
+                            && echo "FRONTEND: Ready!" || echo "Frontend still rolling..."
 
-                        # ---- Backend: non-blocking watch (downloads ML on first run) ----
-                        echo "Watching backend rollout (up to 10 min, non-blocking)..."
+                        # ---- Backend rollout (non-blocking: ML models take 5-10 min on cold start) ----
+                        echo "Watching backend rollout (10 min max, non-blocking)..."
                         kubectl rollout status deployment/${HELM_RELEASE}-backend \\
-                            --namespace ${K8S_NAMESPACE} --timeout=600s || {
-                                echo "Backend not yet Ready (may still be loading models)."
-                                echo "--- Backend logs (last 40 lines) ---"
+                            --namespace ${K8S_NAMESPACE} --timeout=600s \\
+                            && echo "BACKEND: Ready!" || {
+                                echo "Backend not yet Ready — still loading ML models (normal on first boot)."
+                                echo "=== Backend Pod Logs ==="
                                 kubectl logs -l app.kubernetes.io/component=backend \\
-                                    -n ${K8S_NAMESPACE} --tail=40 2>/dev/null || true
-                                echo "--- Backend events ---"
+                                    -n ${K8S_NAMESPACE} --tail=50 2>/dev/null || true
+                                echo "=== Recent Events ==="
                                 kubectl get events -n ${K8S_NAMESPACE} \\
                                     --sort-by='.lastTimestamp' 2>/dev/null | tail -20 || true
                             }
 
-                        echo "--- Final Pod Status ---"
+                        echo "=== FINAL STATUS ==="
                         kubectl get pods -n ${K8S_NAMESPACE} -o wide
                         kubectl get svc  -n ${K8S_NAMESPACE}
+                        kubectl get pvc  -n ${K8S_NAMESPACE}
+                        MINIKUBE_IP=\$(minikube ip 2>/dev/null || echo "unknown")
+                        echo "Frontend: http://\${MINIKUBE_IP}:30000"
+                        echo "Backend:  http://\${MINIKUBE_IP}:30080"
+                        echo "Grafana:  http://\${MINIKUBE_IP}:30030"
                     """
                 }
             }
+        }
+
+
         }
 
         // ====================================================================
