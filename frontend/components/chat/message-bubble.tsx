@@ -14,9 +14,11 @@ import {
   ShieldAlert,
   Image as ImageIcon,
   X,
+  Globe,
 } from "lucide-react";
 import { CitationCard } from "@/components/chat/citation-card";
 import { useLanguage } from "@/context/language-context";
+import { downloadDirectPDF } from "@/lib/api";
 
 interface Props {
   message: ChatMessage;
@@ -28,6 +30,7 @@ export function MessageBubble({ message, onSelectOption }: Props) {
   const isUser = message.role === "user";
   const rag = message.ragResponse;
   const [activeModalImage, setActiveModalImage] = useState<string | null>(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
 
   // Confidence styling
   const getConfidenceBadge = (level?: string, score?: number) => {
@@ -67,7 +70,7 @@ export function MessageBubble({ message, onSelectOption }: Props) {
       )}
 
       {/* Message content */}
-      <div className={`max-w-[85%] space-y-3 ${isUser ? "items-end" : "items-start"}`}>
+      <div className={`max-w-[95%] sm:max-w-[85%] space-y-3 ${isUser ? "items-end" : "items-start"}`}>
         <div
           className={`rounded-xl px-4 py-3 text-sm leading-relaxed shadow-sm ${
             isUser
@@ -154,7 +157,7 @@ export function MessageBubble({ message, onSelectOption }: Props) {
                 <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-600" />
                 <div>
                   <p className="font-semibold">{t("Insufficient Information")}</p>
-                  <p className="mt-0.5">{rag.insufficient_message || "Insufficient information in the available sources."}</p>
+                  <p className="mt-0.5">{rag.insufficient_message || t("Insufficient information in the available sources.")}</p>
                 </div>
               </div>
             )}
@@ -203,21 +206,25 @@ export function MessageBubble({ message, onSelectOption }: Props) {
                   <ImageIcon className="h-3.5 w-3.5 text-[var(--color-primary)]" />
                   {t("Yellow-Highlighted Source Manual Evidence")}
                 </div>
-                <div className="grid grid-cols-2 gap-2 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
                   {rag.evidence_images.map((ev, i) => (
                     <div
                       key={i}
-                      className="group cursor-pointer rounded border overflow-hidden bg-neutral-900"
+                      className="group cursor-pointer rounded-lg border border-[var(--color-border)] overflow-hidden bg-neutral-950/5 dark:bg-neutral-900/60 shadow-xs hover:border-[var(--color-primary)] transition-all"
                       onClick={() => setActiveModalImage(ev.url)}
+                      title="Click to view full screen"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={ev.url}
-                        alt={ev.caption || "Source manual evidence"}
-                        className="h-28 w-full object-cover group-hover:opacity-90 transition-opacity"
-                      />
-                      <div className="p-1.5 bg-[var(--color-surface-elevated)] border-t text-[10px] truncate text-[var(--color-text-secondary)]">
-                        {ev.caption}
+                      <div className="relative w-full h-44 sm:h-52 flex items-center justify-center p-1 bg-black/5 dark:bg-black/30">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={ev.url}
+                          alt={ev.caption || "Source manual evidence"}
+                          className="max-h-full max-w-full object-contain group-hover:scale-[1.02] transition-transform duration-200"
+                        />
+                      </div>
+                      <div className="p-2 bg-[var(--color-surface-elevated)] border-t border-[var(--color-border)] text-[11px] font-medium truncate text-[var(--color-text-secondary)] flex items-center justify-between">
+                        <span className="truncate">{ev.caption}</span>
+                        <span className="text-[10px] text-[var(--color-primary)] ml-1 flex-shrink-0">Zoom ↗</span>
                       </div>
                     </div>
                   ))}
@@ -254,23 +261,93 @@ export function MessageBubble({ message, onSelectOption }: Props) {
               </div>
             )}
 
+            {/* Live Web Proof Links */}
+            {rag.proof_links && rag.proof_links.length > 0 && (
+              <div className="space-y-1.5 rounded-lg border border-blue-200 dark:border-blue-900/60 bg-blue-50/50 dark:bg-blue-950/20 p-2.5">
+                <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-700 dark:text-blue-400 uppercase tracking-wider">
+                  <Globe className="h-3.5 w-3.5" />
+                  {t("Live Web Proof & Technical Bulletins")}
+                </div>
+                <div className="space-y-1.5 pt-0.5">
+                  {rag.proof_links.map((proof, i) => (
+                    <a
+                      key={i}
+                      href={proof.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-start justify-between gap-2 rounded-md border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/90 p-2 text-xs hover:border-blue-400 dark:hover:border-blue-600 transition group shadow-xs"
+                    >
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="font-medium text-blue-600 dark:text-blue-400 group-hover:underline flex items-center gap-1">
+                          <span className="truncate">{proof.title}</span>
+                          <ExternalLink className="h-3 w-3 flex-shrink-0 opacity-70" />
+                        </div>
+                        {proof.snippet && (
+                          <p className="text-[11px] text-[var(--color-text-muted)] line-clamp-2">
+                            {proof.snippet}
+                          </p>
+                        )}
+                        <span className="inline-block text-[10px] text-neutral-400 dark:text-neutral-500">
+                          {proof.source || "OEM Web Search"}
+                        </span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Report Actions */}
             {(rag.report_pdf_url || rag.report_html_url || (rag.diagnosis && !rag.is_insufficient)) && (
               <div className="flex items-center gap-2 pt-1">
-                <a
-                  href={rag.report_pdf_url || `/api/reports/${rag.report_id || "CURRENT"}/pdf`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-1.5 text-xs font-semibold text-[var(--color-text)] hover:bg-neutral-50 dark:hover:bg-neutral-700 transition shadow-xs"
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!rag) return;
+                    setDownloadingPdf(true);
+                    try {
+                      await downloadDirectPDF({
+                        report_id: rag.report_id || `REP-${Date.now()}`,
+                        query: rag.problem || message.content,
+                        machine_model: rag.detected_machine || "Industrial Equipment",
+                        error_code: rag.detected_error_code || "FAULT_DIAGNOSIS",
+                        problem: rag.problem || message.content,
+                        diagnosis: rag.diagnosis || message.content,
+                        probable_causes: rag.probable_causes || [],
+                        recommended_solutions:
+                          rag.recommended_solutions ||
+                          (rag.corrective_steps
+                            ? rag.corrective_steps.map((s, idx) => ({ action: s, priority: idx + 1 }))
+                            : []),
+                        safety_warnings: rag.safety_warnings || [],
+                        confidence_level: rag.confidence_level || "HIGH",
+                        confidence: rag.confidence || 0.9,
+                        citations: rag.citations || [],
+                        proof_links: rag.proof_links || [],
+                        evidence_images: rag.evidence_images || [],
+                      });
+                    } catch (err) {
+                      console.error("Direct PDF generation failed, falling back to URL:", err);
+                      window.open(rag.report_pdf_url || `/api/reports/${rag.report_id || "CURRENT"}/pdf`, "_blank");
+                    } finally {
+                      setDownloadingPdf(false);
+                    }
+                  }}
+                  disabled={downloadingPdf}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition shadow-xs disabled:opacity-50 cursor-pointer"
                 >
-                  <Download className="h-3.5 w-3.5 text-blue-600" />
-                  {t("Download PDF Report")}
-                </a>
+                  {downloadingPdf ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-[var(--color-primary)]" />
+                  ) : (
+                    <Download className="h-3.5 w-3.5 text-neutral-800 dark:text-neutral-200" />
+                  )}
+                  <span>{downloadingPdf ? t("Generating PDF...") : t("Download PDF Report")}</span>
+                </button>
                 <a
                   href={rag.report_html_url || `/api/reports/${rag.report_id || "CURRENT"}/html`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 dark:border-neutral-700 bg-white dark:bg-neutral-800 px-3 py-1.5 text-xs font-semibold text-[var(--color-text)] hover:bg-neutral-50 dark:hover:bg-neutral-700 transition shadow-xs"
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface-elevated)] px-3 py-1.5 text-xs font-semibold text-[var(--color-text)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition shadow-xs"
                 >
                   <ExternalLink className="h-3.5 w-3.5 text-emerald-600" />
                   {t("View HTML Report")}

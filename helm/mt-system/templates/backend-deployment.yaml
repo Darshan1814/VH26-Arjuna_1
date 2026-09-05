@@ -1,0 +1,175 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "mt-system.fullname" . }}-backend
+  labels:
+    app.kubernetes.io/component: backend
+    {{- include "mt-system.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/component: backend
+      app.kubernetes.io/name: {{ include "mt-system.name" . }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/component: backend
+        app.kubernetes.io/name: {{ include "mt-system.name" . }}
+    spec:
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.backend.service.port }}
+              protocol: TCP
+          env:
+            # --- Static backend config ---
+            - name: BACKEND_HOST
+              value: {{ .Values.backend.env.BACKEND_HOST | quote }}
+            - name: BACKEND_PORT
+              value: {{ .Values.backend.env.BACKEND_PORT | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.backend.env.LOG_LEVEL | quote }}
+            - name: EMBEDDING_MODEL
+              value: {{ .Values.backend.env.EMBEDDING_MODEL | quote }}
+            - name: EMBEDDING_DIMENSION
+              value: {{ .Values.backend.env.EMBEDDING_DIMENSION | quote }}
+            - name: RERANKER_MODEL
+              value: {{ .Values.backend.env.RERANKER_MODEL | quote }}
+            - name: HF_HOME
+              value: {{ .Values.backend.env.HF_HOME | quote }}
+            - name: MANUALS_DIR
+              value: "/app/manuals"
+            - name: SQLITE_DB_PATH
+              value: "/app/database/troubleshooter.db"
+            # --- Groq LLM keys (from secret) ---
+            - name: GROQ_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: GROQ_API_KEY
+            - name: GROQ_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: GROQ_MODEL
+            - name: GROQ_FAST_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: GROQ_FAST_MODEL
+            - name: GROQ_REASONING_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: GROQ_REASONING_MODEL
+            - name: GROQ_VISION_MODEL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: GROQ_VISION_MODEL
+            # --- ElevenLabs Voice AI (from secret) ---
+            - name: ELEVENLABS_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: ELEVENLABS_API_KEY
+            - name: ELEVENLABS_VOICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: ELEVENLABS_VOICE_ID
+            - name: ELEVENLABS_FALLBACK_VOICE_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: ELEVENLABS_FALLBACK_VOICE_ID
+            - name: ELEVENLABS_MODEL_ID
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: ELEVENLABS_MODEL_ID
+            # --- Supabase (from secret) ---
+            - name: SUPABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: SUPABASE_URL
+            - name: SUPABASE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: SUPABASE_KEY
+            - name: SUPABASE_ANON_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: SUPABASE_ANON_KEY
+            - name: SUPABASE_SERVICE_ROLE_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: SUPABASE_SERVICE_ROLE_KEY
+            - name: SUPABASE_STORAGE_BUCKET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: SUPABASE_STORAGE_BUCKET
+            # --- Serper (from secret) ---
+            - name: SERPER_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "mt-system.fullname" . }}-secrets
+                  key: SERPER_API_KEY
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+          livenessProbe:
+            httpGet:
+              path: {{ .Values.backend.probes.liveness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.backend.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.backend.probes.liveness.periodSeconds }}
+            timeoutSeconds: {{ .Values.backend.probes.liveness.timeoutSeconds }}
+            failureThreshold: {{ .Values.backend.probes.liveness.failureThreshold | default 3 }}
+          readinessProbe:
+            httpGet:
+              path: {{ .Values.backend.probes.readiness.path }}
+              port: http
+            initialDelaySeconds: {{ .Values.backend.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ .Values.backend.probes.readiness.periodSeconds }}
+            timeoutSeconds: {{ .Values.backend.probes.readiness.timeoutSeconds }}
+            failureThreshold: {{ .Values.backend.probes.readiness.failureThreshold | default 3 }}
+          volumeMounts:
+            - name: model-cache
+              mountPath: /app/model_cache
+            - name: db-data
+              mountPath: /app/database
+            - name: manuals-data
+              mountPath: /app/manuals
+      volumes:
+        - name: model-cache
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "mt-system.fullname" . }}-model-cache-pvc
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: db-data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "mt-system.fullname" . }}-data-pvc
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+        - name: manuals-data
+          {{- if .Values.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "mt-system.fullname" . }}-manuals-pvc
+          {{- else }}
+          emptyDir: {}
+          {{- end }}

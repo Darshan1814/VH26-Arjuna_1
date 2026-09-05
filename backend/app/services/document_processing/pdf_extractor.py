@@ -49,14 +49,17 @@ class PDFExtractor:
             except Exception:
                 pass
 
-            # Detect headings / section titles from blocks
+            # Detect headings / section titles and individual text blocks
             blocks = page.get_text("blocks")
+            blocks_list = []
             for b in blocks:
                 block_text = b[4].strip()
+                if not block_text:
+                    continue
+                blocks_list.append(block_text)
                 # If block is short, title-cased or uppercase, treat as potential section heading
                 if 4 < len(block_text) < 60 and ("section" in block_text.lower() or block_text.isupper()):
                     current_section = block_text.replace("\n", " ")
-                    break
 
             # Fallback to OCR if text is scarce (< 50 characters) but images exist
             was_ocr = False
@@ -72,6 +75,7 @@ class PDFExtractor:
                 "page_number": page_num,
                 "section": current_section,
                 "text": text,
+                "blocks": blocks_list,
                 "has_tables": len(page_tables) > 0,
                 "table_data": page_tables,
                 "image_count": len(images),

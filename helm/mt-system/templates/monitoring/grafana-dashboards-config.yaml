@@ -1,0 +1,21 @@
+{{- if .Values.monitoring.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mt-system.fullname" . }}-grafana-dashboards-config
+  labels:
+    app.kubernetes.io/component: monitoring-grafana
+    {{- include "mt-system.labels" . | nindent 4 }}
+data:
+  dashboards.yaml: |
+    apiVersion: 1
+    providers:
+      - name: 'Machine Troubleshooter Dashboards'
+        orgId: 1
+        folder: 'Machine Troubleshooter'
+        type: file
+        disableDeletion: false
+        editable: true
+        options:
+          path: /etc/grafana/dashboards
+{{- end }}

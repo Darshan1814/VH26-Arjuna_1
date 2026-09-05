@@ -47,6 +47,7 @@ export interface RAGResponse {
 
   // Traceable citations & evidence images
   citations: Citation[];
+  proof_links?: { title: string; link: string; snippet?: string; source?: string }[];
   evidence_images?: EvidenceImage[];
 
   // Disambiguation

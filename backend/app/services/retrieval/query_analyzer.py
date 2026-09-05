@@ -41,17 +41,9 @@ class QueryAnalyzer:
         query: str,
         machine_id: Optional[str] = None,
     ) -> QueryAnalysis:
-        """Analyze a query to extract error codes, machine references, and type.
-
-        Args:
-            query: The raw user query.
-            machine_id: Optional pre-selected machine ID from the UI.
-
-        Returns:
-            QueryAnalysis with detected entities and classification.
-        """
-        error_codes = self._extract_error_codes(query)
+        """Analyze a query to extract error codes, machine references, and type."""
         detected_machine_model = self._detect_machine_reference(query)
+        error_codes = self._extract_error_codes(query, detected_machine=detected_machine_model)
 
         # Determine query type
         if machine_id or detected_machine_model:
@@ -66,8 +58,7 @@ class QueryAnalyzer:
         if not resolved_machine_id and detected_machine_model:
             resolved_machine_id = self._resolve_machine_id(detected_machine_model)
 
-        # Clean query for semantic search (remove error codes and machine names
-        # since those are handled by exact/metadata filtering)
+        # Clean query for semantic search
         semantic_query = self._clean_for_semantic(query)
 
         analysis = QueryAnalysis(
@@ -87,22 +78,33 @@ class QueryAnalyzer:
 
         return analysis
 
-    def _extract_error_codes(self, query: str) -> list[str]:
-        """Extract error code patterns from query."""
-        return list(set(ERROR_CODE_PATTERN.findall(query.upper())))
+    def _extract_error_codes(self, query: str, detected_machine: Optional[str] = None) -> list[str]:
+        """Extract error code patterns from query, excluding machine model parts."""
+        raw_codes = list(set(ERROR_CODE_PATTERN.findall(query.upper())))
+        if detected_machine:
+            mach_clean = detected_machine.upper().replace("-", " ")
+            mach_tokens = set(mach_clean.split())
+            raw_codes = [c for c in raw_codes if c not in mach_tokens and c not in detected_machine.upper()]
+        return raw_codes
 
     def _detect_machine_reference(self, query: str) -> Optional[str]:
-        """Detect machine model references in the query.
+        """Detect machine model references in the query."""
+        # 1. Match explicit phrases like "machine CNC X100" or "for machine Press-Z200"
+        mach_after = re.search(r'\b(?:machine|model|system|equipment)\s+([A-Za-z0-9_\- ]{2,30})\b', query, re.IGNORECASE)
+        if mach_after:
+            cand = mach_after.group(1).strip()
+            cand = re.sub(r'\b(error|fault|troubleshoot|code|manual)\b.*', '', cand, flags=re.IGNORECASE).strip()
+            if cand and len(cand) >= 2:
+                return cand.upper().replace("  ", " ")
 
-        Looks for patterns like CNC-X100, PRESS-Z200, etc.
-        """
-        # Pattern for machine model numbers: letters-letters/numbers
+        # 2. Match standard industrial machine identifiers like CNC-X100, PRESS-Z200, RoboArm-R5, PackPro-200
         machine_pattern = re.compile(
-            r"\b([A-Z]{2,}[-_][A-Z]?\d{2,4})\b", re.IGNORECASE
+            r"\b([A-Za-z0-9]{2,15}[-_][A-Za-z0-9]{1,8}|(?:CNC|PRESS|LATHE|ROBOT|[A-Za-z0-9]*\d[A-Za-z0-9]*)\s+[A-Za-z0-9]*\d[A-Za-z0-9]*)\b",
+            re.IGNORECASE,
         )
         matches = machine_pattern.findall(query)
         if matches:
-            return matches[0].upper()
+            return matches[0].upper().replace(" ", "-")
         return None
 
     def _resolve_machine_id(self, model_number: str) -> Optional[str]:
@@ -126,7 +128,7 @@ class QueryAnalyzer:
         """Remove error codes and machine references for semantic search."""
         cleaned = ERROR_CODE_PATTERN.sub("", query)
         machine_pattern = re.compile(
-            r"\b[A-Z]{2,}[-_][A-Z]?\d{2,4}\b", re.IGNORECASE
+            r"\b[A-Za-z0-9]{2,15}[-_][A-Za-z0-9]{1,8}\b", re.IGNORECASE
         )
         cleaned = machine_pattern.sub("", cleaned)
         # Collapse whitespace

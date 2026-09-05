@@ -100,20 +100,50 @@ class MultiFormatIngestionService:
             all_errors.update(p_errors)
             p_machine = explicit_machine or page_meta.get("primary_machine") or machine_model
 
-            items.append({
-                "source_type": "pdf",
-                "file_name": file_name,
-                "machine_model": p_machine,
-                "page": p["page_number"],
-                "section": p["section"],
-                "content": p["text"],
-                "error_codes": p_errors,
-                "metadata": {
-                    "was_ocr": p["was_ocr"],
-                    "has_tables": p["has_tables"],
-                    "image_count": p["image_count"],
-                },
-            })
+            blocks = p.get("blocks", [])
+            machine_blocks = []
+            if blocks and len(blocks) > 1:
+                for blk in blocks:
+                    blk_clean = " ".join(blk.split())
+                    blk_meta = self.metadata_extractor.extract(blk_clean, file_name)
+                    b_machines = blk_meta.get("machine_models", [])
+                    b_errors = blk_meta.get("error_codes", [])
+                    if b_machines or b_errors:
+                        b_mach = explicit_machine or blk_meta.get("primary_machine") or p_machine
+                        machine_blocks.append({
+                            "source_type": "pdf",
+                            "file_name": file_name,
+                            "machine_model": b_mach,
+                            "page": p["page_number"],
+                            "section": p["section"],
+                            "content": blk_clean,
+                            "error_codes": b_errors,
+                            "metadata": {
+                                "was_ocr": p["was_ocr"],
+                                "has_tables": p["has_tables"],
+                                "image_count": p["image_count"],
+                                "machine_models": b_machines,
+                            },
+                        })
+
+            if len(machine_blocks) > 1:
+                items.extend(machine_blocks)
+            else:
+                items.append({
+                    "source_type": "pdf",
+                    "file_name": file_name,
+                    "machine_model": p_machine,
+                    "page": p["page_number"],
+                    "section": p["section"],
+                    "content": p["text"],
+                    "error_codes": p_errors,
+                    "metadata": {
+                        "was_ocr": p["was_ocr"],
+                        "has_tables": p["has_tables"],
+                        "image_count": p["image_count"],
+                        "machine_models": page_meta.get("machine_models", []),
+                    },
+                })
 
         return NormalizedDocument(
             source_type="pdf",

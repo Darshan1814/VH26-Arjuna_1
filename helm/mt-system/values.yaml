@@ -1,0 +1,151 @@
+# =============================================================================
+# Machine Troubleshooter Helm Values
+# =============================================================================
+
+# -- Global Settings --
+nameOverride: ""
+fullnameOverride: "mt"
+
+# -- Docker Registry --
+registry: docker.io
+imageCredentials:
+  username: darshan11111
+
+# -- Backend Configuration --
+backend:
+  replicaCount: 1
+  image:
+    repository: darshan11111/mt-backend
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: NodePort
+    port: 8000
+    nodePort: 30080
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2048Mi
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 75
+    targetMemoryUtilizationPercentage: 85
+  probes:
+    liveness:
+      path: /health
+      initialDelaySeconds: 120
+      periodSeconds: 30
+      timeoutSeconds: 15
+      failureThreshold: 5
+    readiness:
+      path: /health
+      initialDelaySeconds: 60
+      periodSeconds: 10
+      timeoutSeconds: 10
+      failureThreshold: 5
+  env:
+    BACKEND_HOST: "0.0.0.0"
+    BACKEND_PORT: "8000"
+    LOG_LEVEL: "info"
+    EMBEDDING_MODEL: "BAAI/bge-m3"
+    EMBEDDING_DIMENSION: "1024"
+    RERANKER_MODEL: "BAAI/bge-reranker-v2-m3"
+    HF_HOME: "/app/model_cache"
+
+# -- Frontend Configuration --
+frontend:
+  replicaCount: 1
+  image:
+    repository: darshan11111/mt-frontend
+    tag: "latest"
+    pullPolicy: IfNotPresent
+  service:
+    type: NodePort
+    port: 3000
+    nodePort: 30000
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 512Mi
+  hpa:
+    enabled: true
+    minReplicas: 1
+    maxReplicas: 3
+    targetCPUUtilizationPercentage: 80
+  probes:
+    liveness:
+      path: /
+      initialDelaySeconds: 30
+      periodSeconds: 30
+      timeoutSeconds: 10
+    readiness:
+      path: /
+      initialDelaySeconds: 15
+      periodSeconds: 10
+      timeoutSeconds: 5
+
+# -- Ingress Configuration --
+ingress:
+  enabled: true
+  className: nginx
+  host: mt.local
+  annotations:
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "120"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "120"
+
+# -- Secrets (injected from Jenkins at deploy time) --
+secrets:
+  # Groq LLM
+  groqApiKey: ""
+  groqModel: "qwen/qwen3.8-27b"
+  groqFastModel: "openai/gpt-oss-20b"
+  groqReasoningModel: "openai/gpt-oss-120b"
+  groqVisionModel: "openai/gpt-oss-20b"
+  # ElevenLabs Multilingual Voice AI
+  elevenLabsApiKey: ""
+  elevenLabsVoiceId: "gHu9GtaHOXcSqFTK06ux"
+  elevenLabsFallbackVoiceId: "EXAVITQu4vr4xnSDxMaL"
+  elevenLabsModelId: "eleven_multilingual_v2"
+  # Web search
+  serperApiKey: ""
+  # Supabase (optional cloud sync)
+  supabaseUrl: ""
+  supabaseKey: ""
+  supabaseServiceRoleKey: ""
+  supabasePublishableKey: ""
+  supabaseSecretKey: ""
+  supabaseStorageBucket: "manuals"
+
+# -- Persistent Volume Claims (model cache, database, manuals) --
+persistence:
+  enabled: true
+  storageClass: ""
+  accessMode: ReadWriteOnce
+  size: 5Gi         # model_cache
+  manualsSize: 10Gi # uploaded OEM manuals
+
+# -- Observability & Monitoring (Prometheus + Grafana) --
+monitoring:
+  enabled: true
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    port: 9090
+    serviceType: NodePort
+    nodePort: 30090
+    scrapeInterval: 15s
+  grafana:
+    image: grafana/grafana:10.4.1
+    port: 3000
+    serviceType: NodePort
+    nodePort: 30030
+    adminUser: admin
+    adminPassword: admin

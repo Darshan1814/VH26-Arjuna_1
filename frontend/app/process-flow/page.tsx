@@ -126,7 +126,6 @@ export default function ProcessFlowPage() {
           setStepTelemetry(data.step_data);
           if (data.current_step) setCurrentStep(data.current_step);
         }
-        // Auto-run Step 1 so user immediately sees live document data
         await runStep(1, sid);
       } catch (err: any) {
         console.warn("Session init notice:", err.message);
@@ -154,9 +153,20 @@ export default function ProcessFlowPage() {
         [stepNum]: res.telemetry,
       }));
       setCurrentStep(stepNum);
-      if (stepNum === 3 && res.telemetry?.suggested_queries?.length > 0 && !queryInput) {
+
+      const detectedName =
+        res.telemetry?.detected_machine ||
+        res.telemetry?.document_profile?.equipment_name;
+      if (
+        detectedName &&
+        !detectedName.includes("Awaiting") &&
+        (!queryInput || queryInput.includes("this equipment"))
+      ) {
+        setQueryInput(`What are the primary troubleshooting procedures and fault resolution steps for ${detectedName}?`);
+      } else if (stepNum === 3 && res.telemetry?.suggested_queries?.length > 0 && !queryInput) {
         setQueryInput(res.telemetry.suggested_queries[0]);
       }
+
       return res.telemetry;
     } catch (err: any) {
       setErrorMessage(`Step ${stepNum} failed: ${err.message}`);
@@ -197,17 +207,14 @@ export default function ProcessFlowPage() {
     }
   };
 
-  // "When I click on Next the step should run, otherwise cannot move to next step"
   const handleNext = async () => {
     if (isRunning) return;
 
-    // If current step hasn't completed yet, run it first
     if (!stepTelemetry[currentStep]) {
       await runStep(currentStep);
       return;
     }
 
-    // Advance to next step and immediately execute it
     if (currentStep < 8) {
       const nextStepNum = currentStep + 1;
       await runStep(nextStepNum);
@@ -227,11 +234,9 @@ export default function ProcessFlowPage() {
     try {
       const filesArray = Array.from(e.target.files);
       await uploadFlowFiles(filesArray, sessionId);
-      // Reset all downstream telemetry and query so pipeline strictly processes the new document
       setStepTelemetry({});
       setCurrentStep(1);
       setQueryInput("");
-      // Re-run Step 1 with new file
       await runStep(1);
     } catch (err: any) {
       setErrorMessage(`Upload failed: ${err.message}`);
@@ -248,9 +253,7 @@ export default function ProcessFlowPage() {
     setErrorMessage(null);
     try {
       await removeFlowFile(sessionId, filename);
-      // Invalidate step telemetry so downstream stages recalculate
       setStepTelemetry({});
-      // Re-run Step 1 with remaining files
       await runStep(1);
     } catch (err: any) {
       setErrorMessage(`Failed to remove ${filename}: ${err.message}`);
@@ -265,7 +268,8 @@ export default function ProcessFlowPage() {
   const isCurrentStepCompleted = !!stepTelemetry[currentStep];
 
   return (
-    <div className="mx-auto max-w-7xl px-4 py-6 space-y-6">
+    <div className="w-full flex-1 py-6 px-4 sm:px-6 lg:px-8">
+      <div className="w-full max-w-[1600px] mx-auto space-y-6">
       {/* Top Header & Session Bar */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-4">
         <div>
@@ -274,7 +278,7 @@ export default function ProcessFlowPage() {
               {t("SESSION")}: {sessionId || t("INITIALIZING")}
             </span>
             <span className="text-xs text-[var(--color-text-muted)] font-medium">
-              {t("Step")} {currentStep} {t("of 8")} • {t("Powered by OpenAI 5.5")}
+              {t("Step")} {currentStep} {t("of 8")} • {t("Advanced Diagnostic Engine")}
             </span>
           </div>
           <h1 className="text-xl font-extrabold text-[var(--color-text)] mt-1">
@@ -452,7 +456,6 @@ export default function ProcessFlowPage() {
             )}
 
             {/* Step 8 Query Selection / Input & Verification */}
-            {/* Step 8 Query Selection / Input & Verification */}
             {currentStep === 8 && (
               <div className="space-y-3 pt-1">
                 <div className="flex items-center justify-between">
@@ -538,7 +541,7 @@ export default function ProcessFlowPage() {
                   {isRunning ? (
                     <>
                       <Loader2 className="h-4 w-4 animate-spin" />
-                      <span>{t("Verifying & Processing Query with OpenAI 5.5...")}</span>
+                      <span>{t("Verifying & Processing Diagnostic Query...")}</span>
                     </>
                   ) : (
                     <>
@@ -577,10 +580,10 @@ export default function ProcessFlowPage() {
               <div className="flex flex-col items-center justify-center py-16 text-center space-y-3">
                 <Loader2 className="h-8 w-8 animate-spin text-[var(--color-primary)]" />
                 <p className="text-sm font-semibold text-[var(--color-text)]">
-                  Processing Step {currentStep}: {currentStepData.title}...
+                  {t("Processing Step")} {currentStep}: {t(currentStepData.title)}...
                 </p>
                 <p className="text-xs text-[var(--color-text-muted)] max-w-sm">
-                  Executing multimodal extraction, neural embeddings, or OpenAI reasoning.
+                  {t("Executing multimodal extraction, neural embeddings, or diagnostic reasoning.")}
                 </p>
               </div>
             )}
@@ -607,7 +610,7 @@ export default function ProcessFlowPage() {
                   <div className="rounded-lg border p-4 bg-blue-50/40 dark:bg-blue-950/20 space-y-2">
                     <div className="flex items-center gap-1.5 font-bold text-blue-900 dark:text-blue-300">
                       <Sparkles className="h-4 w-4" />
-                      <span>{t("OpenAI Technical Document Profile:")}</span>
+                      <span>{t("Technical Document Profile:")}</span>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
                       <div><strong>{t("Equipment Name:")}</strong> {activeTelemetry.document_profile.equipment_name}</div>
@@ -635,10 +638,10 @@ export default function ProcessFlowPage() {
                   {(!activeTelemetry.files || activeTelemetry.files.length === 0) ? (
                     <div className="rounded-lg border border-dashed border-[var(--color-border)] p-6 text-center text-[var(--color-text-muted)] space-y-2 bg-[var(--color-surface-elevated)]">
                       <p className="font-semibold text-xs text-[var(--color-text)]">
-                        No documents currently uploaded in this session
+                        {t("No documents currently uploaded in this session")}
                       </p>
                       <p className="text-[10px]">
-                        Click &ldquo;Upload Service Manual or Schematic&rdquo; on the left or &ldquo;+ Upload Another Manual&rdquo; above.
+                        {t("Click \"Upload Service Manual or Schematic\" on the left or \"+ Upload Another Manual\" above.")}
                       </p>
                     </div>
                   ) : (
@@ -661,7 +664,7 @@ export default function ProcessFlowPage() {
                                   {f.type}
                                 </span>
                                 <span>{f.size_kb} KB</span>
-                                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">• Stored in SQLite</span>
+                                <span className="text-emerald-600 dark:text-emerald-400 font-semibold">• {t("Stored in SQLite")}</span>
                               </div>
                             </div>
                           </div>
@@ -677,7 +680,7 @@ export default function ProcessFlowPage() {
                             ) : (
                               <Trash2 className="h-3.5 w-3.5" />
                             )}
-                            <span>Cancel</span>
+                            <span>{t("Cancel")}</span>
                           </button>
                         </div>
                       ))}
@@ -692,33 +695,33 @@ export default function ProcessFlowPage() {
               <div className="space-y-4 text-xs">
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Pages Processed</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("Pages Processed")}</span>
                     <p className="text-base font-bold text-[var(--color-text)] mt-0.5">{activeTelemetry.pages_processed}</p>
                   </div>
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Tables Extracted</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("Tables Extracted")}</span>
                     <p className="text-base font-bold text-blue-600 mt-0.5">{activeTelemetry.tables_detected}</p>
                   </div>
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Diagrams Detected</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("Diagrams Detected")}</span>
                     <p className="text-base font-bold text-purple-600 mt-0.5">{activeTelemetry.diagrams_detected}</p>
                   </div>
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">OCR Processed</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("OCR Processed")}</span>
                     <p className="text-base font-bold text-amber-600 mt-0.5">{activeTelemetry.ocr_pages_processed} Pages</p>
                   </div>
                 </div>
 
                 <div>
                   <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block mb-2">
-                    Extracted Document Sections:
+                    {t("Extracted Document Sections:")}
                   </span>
                   <div className="space-y-2">
                     {(activeTelemetry.extracted_sections_sample || []).map((sec: any, i: number) => (
                       <div key={i} className="rounded border p-2.5 bg-[var(--color-surface-elevated)] space-y-1">
                         <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)]">
-                          <span className="font-bold text-[var(--color-primary)]">Section: {sec.section}</span>
-                          <span>Page {sec.page}</span>
+                          <span className="font-bold text-[var(--color-primary)]">{t("Section")}: {sec.section}</span>
+                          <span>{t("Page")} {sec.page}</span>
                         </div>
                         <p className="text-[var(--color-text-secondary)]">{sec.snippet}</p>
                       </div>
@@ -733,21 +736,21 @@ export default function ProcessFlowPage() {
               <div className="space-y-4 text-xs">
                 <div className="rounded-lg border p-4 bg-emerald-50/40 dark:bg-emerald-950/20 space-y-2">
                   <div className="text-xs font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
-                    Equipment Identification Verdict:
+                    {t("Equipment Identification Verdict:")}
                   </div>
                   <h3 className="text-base font-extrabold text-[var(--color-text)]">
                     {activeTelemetry.detected_machine}
                   </h3>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2 pt-1 text-[11px]">
-                    <div><strong>Model Range:</strong> {activeTelemetry.model_range}</div>
-                    <div><strong>Electrical Spec:</strong> {activeTelemetry.electrical_specs}</div>
+                    <div><strong>{t("Model Range:")}</strong> {activeTelemetry.model_range}</div>
+                    <div><strong>{t("Electrical Spec:")}</strong> {activeTelemetry.electrical_specs}</div>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="rounded-lg border p-3 space-y-2 bg-[var(--color-surface-elevated)]">
                     <span className="font-bold text-[11px] text-[var(--color-text)] uppercase tracking-wider block">
-                      Operating Subsystems Identified:
+                      {t("Operating Subsystems Identified:")}
                     </span>
                     <ul className="list-disc list-inside space-y-1 text-[var(--color-text-secondary)]">
                       {(activeTelemetry.key_subsystems || []).map((sub: string, i: number) => (
@@ -759,7 +762,7 @@ export default function ProcessFlowPage() {
                   <div className="rounded-lg border border-red-200 dark:border-red-900/40 p-3 space-y-2 bg-red-50/30 dark:bg-red-950/20">
                     <span className="font-bold text-[11px] text-red-700 dark:text-red-400 uppercase tracking-wider flex items-center gap-1">
                       <ShieldAlert className="h-3.5 w-3.5" />
-                      Mandatory Safety Precautions:
+                      {t("Mandatory Safety Precautions:")}
                     </span>
                     <ul className="list-disc list-inside space-y-1 text-red-900 dark:text-red-300">
                       {(activeTelemetry.safety_precautions || []).map((sp: string, i: number) => (
@@ -776,29 +779,29 @@ export default function ProcessFlowPage() {
               <div className="space-y-4 text-xs">
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Semantic Chunks</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("Semantic Chunks")}</span>
                     <p className="text-base font-bold text-[var(--color-text)] mt-0.5">{activeTelemetry.total_chunks_created}</p>
                   </div>
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Vector Dimension</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("Vector Dimension")}</span>
                     <p className="text-base font-bold text-blue-600 mt-0.5">{activeTelemetry.dimension} Dense</p>
                   </div>
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Embedding Model</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("Embedding Model")}</span>
                     <p className="text-base font-bold text-purple-600 mt-0.5 font-mono text-[11px] truncate">{activeTelemetry.embedding_model}</p>
                   </div>
                 </div>
 
                 <div>
                   <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block mb-2">
-                    Indexed Semantic Chunk Excerpts:
+                    {t("Indexed Semantic Chunk Excerpts:")}
                   </span>
                   <div className="space-y-2">
                     {(activeTelemetry.sample_chunks || []).map((c: any, i: number) => (
                       <div key={i} className="rounded border p-2.5 bg-[var(--color-surface-elevated)] space-y-1">
                         <div className="flex items-center justify-between text-[10px] text-[var(--color-text-muted)]">
-                          <span className="font-bold text-[var(--color-primary)]">Section: {c.section}</span>
-                          <span>Page {c.page} • {c.machine}</span>
+                          <span className="font-bold text-[var(--color-primary)]">{t("Section")}: {c.section}</span>
+                          <span>{t("Page")} {c.page} • {c.machine}</span>
                         </div>
                         <p className="text-[var(--color-text-secondary)]">{c.excerpt}</p>
                       </div>
@@ -814,7 +817,7 @@ export default function ProcessFlowPage() {
                 <div className="rounded-lg border p-4 bg-purple-50/40 dark:bg-purple-950/20 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="font-bold text-purple-900 dark:text-purple-300 uppercase tracking-wider text-xs">
-                      Target Vector Store:
+                      {t("Target Vector Store:")}
                     </span>
                     <span className="rounded bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 font-bold px-2 py-0.5 text-[10px]">
                       HNSW Active
@@ -828,11 +831,11 @@ export default function ProcessFlowPage() {
 
                 <div className="grid grid-cols-2 gap-3">
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Total Chunks Indexed</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("Total Chunks Indexed")}</span>
                     <p className="text-base font-bold text-emerald-600 mt-0.5">{activeTelemetry.chunks_indexed}</p>
                   </div>
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">GIN Error Index</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("GIN Error Index")}</span>
                     <p className="text-base font-bold text-blue-600 mt-0.5">Array Containment (@&gt;)</p>
                   </div>
                 </div>
@@ -845,20 +848,20 @@ export default function ProcessFlowPage() {
                 <div className="rounded-lg border p-4 bg-blue-50/40 dark:bg-blue-950/20 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-blue-800 dark:text-blue-300 uppercase tracking-wider">
-                      Technical Search Index & Vocabulary Mapping:
+                      {t("Technical Search Index & Vocabulary Mapping:")}
                     </span>
                     <span className="rounded bg-blue-200 text-blue-900 dark:bg-blue-900 dark:text-blue-200 font-bold px-2 py-0.5 text-[10px]">
                       {activeTelemetry.retrieval_status || "HNSW + GIN Ready"}
                     </span>
                   </div>
                   <p className="text-sm font-bold text-[var(--color-text)]">
-                    Diagnostic Search Index & Knowledge Preparation
+                    {t("Diagnostic Search Index & Knowledge Preparation")}
                   </p>
                 </div>
 
                 <div className="rounded-lg border p-3 space-y-2 bg-[var(--color-surface-elevated)]">
                   <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block">
-                    Pre-Diagnostic Indexed Sections:
+                    {t("Pre-Diagnostic Indexed Sections:")}
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {(activeTelemetry.indexed_sections || []).map((sec: string, i: number) => (
@@ -871,7 +874,7 @@ export default function ProcessFlowPage() {
 
                 <div className="rounded-lg border p-3 space-y-2 bg-[var(--color-surface-elevated)]">
                   <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block">
-                    Verified Technical Keywords & Error Codes:
+                    {t("Verified Technical Keywords & Error Codes:")}
                   </span>
                   <div className="flex flex-wrap gap-1.5">
                     {(activeTelemetry.technical_tokens || []).map((tok: string, i: number) => (
@@ -889,28 +892,28 @@ export default function ProcessFlowPage() {
               <div className="space-y-4 text-xs">
                 <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Candidates Retrieved</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("Candidates Retrieved")}</span>
                     <p className="text-base font-bold text-[var(--color-text)] mt-0.5">{activeTelemetry.retrieved_candidates_count}</p>
                   </div>
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Confidence Level</span>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("Confidence Level")}</span>
                     <p className="text-base font-bold text-emerald-600 mt-0.5">{activeTelemetry.confidence_level} ({Math.round((activeTelemetry.confidence_score || 0.9) * 100)}%)</p>
                   </div>
                   <div className="rounded-lg border p-3 bg-[var(--color-surface-elevated)]">
-                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">Ambiguity Check</span>
-                    <p className="text-base font-bold text-blue-600 mt-0.5">Resolved (0 Collisions)</p>
+                    <span className="text-[10px] text-[var(--color-text-muted)] uppercase font-semibold">{t("Ambiguity Check")}</span>
+                    <p className="text-base font-bold text-blue-600 mt-0.5">{t("Resolved (0 Collisions)")}</p>
                   </div>
                 </div>
 
                 <div>
                   <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block mb-2">
-                    Top Neural Reranked Sources (BAAI/bge-reranker-v2-m3):
+                    {t("Top Neural Reranked Sources (BAAI/bge-reranker-v2-m3):")}
                   </span>
                   <div className="space-y-2">
                     {(activeTelemetry.top_sources_reranked || []).map((src: any, i: number) => (
                       <div key={i} className="rounded border p-2.5 bg-[var(--color-surface-elevated)] space-y-1">
                         <div className="flex items-center justify-between text-[10px]">
-                          <span className="font-bold text-[var(--color-primary)]">{src.source} • Page {src.page}</span>
+                          <span className="font-bold text-[var(--color-primary)]">{src.source} • {t("Page")} {src.page}</span>
                           <span className="rounded bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 px-1.5 py-0.2 font-mono font-bold">
                             Score: {src.rerank_score}
                           </span>
@@ -929,10 +932,10 @@ export default function ProcessFlowPage() {
                 <div className="rounded-lg border border-emerald-300 bg-emerald-50/50 dark:bg-emerald-950/30 p-4 space-y-2">
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] font-bold text-emerald-800 dark:text-emerald-300 uppercase tracking-wider">
-                      Diagnostic Finding (OpenAI 5.5 Grounded):
+                      {t("Diagnostic Finding (Verified & Grounded):")}
                     </span>
                     <span className="rounded bg-emerald-200 dark:bg-emerald-900 text-emerald-900 dark:text-emerald-200 px-2 py-0.5 text-[10px] font-bold">
-                      HIGH Confidence (92%)
+                      {t("HIGH Confidence (92%)")}
                     </span>
                   </div>
                   <p className="text-sm font-semibold text-[var(--color-text)]">
@@ -944,7 +947,7 @@ export default function ProcessFlowPage() {
                 {(finalResult.extracted_specifications || []).length > 0 && (
                   <div className="rounded-lg border bg-[var(--color-surface-elevated)] p-3 space-y-1.5">
                     <span className="text-[10px] font-bold text-[var(--color-text-muted)] uppercase tracking-wider block">
-                      Extracted Technical Numbers & Specifications:
+                      {t("Extracted Technical Numbers & Specifications:")}
                     </span>
                     <div className="flex flex-wrap gap-1.5">
                       {finalResult.extracted_specifications.map((spec: string, idx: number) => (
@@ -964,7 +967,7 @@ export default function ProcessFlowPage() {
                   <div className="rounded-lg border border-amber-300 bg-amber-50/70 dark:bg-amber-950/30 p-3.5 space-y-1.5">
                     <span className="text-[11px] font-bold text-amber-800 dark:text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
                       <Sparkles className="h-4 w-4 text-amber-600" />
-                      Recommended Clarifying Questions (Fault Narrowing):
+                      {t("Recommended Clarifying Questions (Fault Narrowing):")}
                     </span>
                     <ul className="list-disc list-inside space-y-1 text-amber-900 dark:text-amber-200 pl-1 text-[11px]">
                       {finalResult.clarification_questions.map((q: string, idx: number) => (
@@ -979,7 +982,7 @@ export default function ProcessFlowPage() {
                 {/* Ranked Solutions */}
                 <div>
                   <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block mb-2">
-                    Ranked Corrective Solutions:
+                    {t("Ranked Corrective Solutions:")}
                   </span>
                   <div className="space-y-2">
                     {(finalResult.recommended_solutions || []).map((sol: any, idx: number) => (
@@ -989,11 +992,11 @@ export default function ProcessFlowPage() {
                             #{sol.priority || idx + 1} {sol.action}
                           </span>
                           <span className="rounded bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-300 px-2 py-0.5 text-[10px] font-bold">
-                            {sol.evidence_strength} Evidence
+                            {sol.evidence_strength} {t("Evidence")}
                           </span>
                         </div>
                         <p className="text-[var(--color-text-secondary)]">{sol.reason}</p>
-                        <p className="text-[10px] text-[var(--color-text-muted)] italic">Source: {sol.source}</p>
+                        <p className="text-[10px] text-[var(--color-text-muted)] italic">{t("Source")}: {sol.source}</p>
                       </div>
                     ))}
                   </div>
@@ -1004,7 +1007,7 @@ export default function ProcessFlowPage() {
                   <div className="rounded-lg border-2 border-red-500/40 bg-red-50 dark:bg-red-950/30 p-3 space-y-1">
                     <span className="text-[11px] font-bold text-red-700 dark:text-red-400 uppercase tracking-wider flex items-center gap-1.5">
                       <ShieldAlert className="h-4 w-4" />
-                      Mandatory Safety Precautions:
+                      {t("Mandatory Safety Precautions:")}
                     </span>
                     <ul className="list-disc list-inside space-y-0.5 text-red-900 dark:text-red-300 pl-1">
                       {finalResult.safety_warnings.map((w: string, i: number) => (
@@ -1018,7 +1021,7 @@ export default function ProcessFlowPage() {
                 {(finalResult.evidence_images || []).length > 0 && (
                   <div>
                     <span className="text-[11px] font-bold text-[var(--color-text)] uppercase tracking-wider block mb-2">
-                      Yellow-Highlighted Source Manual Evidence (Page 9):
+                      {t("Yellow-Highlighted Source Manual Evidence:")}
                     </span>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                       {finalResult.evidence_images.map((ev: any, i: number) => (
@@ -1041,7 +1044,7 @@ export default function ProcessFlowPage() {
                     className="btn-primary text-xs flex items-center gap-1.5 py-2 px-3 shadow-xs"
                   >
                     <Download className="h-3.5 w-3.5" />
-                    Download PDF Report
+                    {t("Download PDF Report")}
                   </a>
                   <a
                     href={finalResult.html_view_url || `/api/reports/${finalResult.report_id}/html`}
@@ -1050,7 +1053,7 @@ export default function ProcessFlowPage() {
                     className="btn-secondary text-xs flex items-center gap-1.5 py-2 px-3 shadow-xs"
                   >
                     <ExternalLink className="h-3.5 w-3.5" />
-                    View Interactive HTML Report
+                    {t("View Interactive HTML Report")}
                   </a>
                 </div>
               </div>
@@ -1066,6 +1069,7 @@ export default function ProcessFlowPage() {
             )}
           </p>
         </div>
+      </div>
       </div>
     </div>
   );

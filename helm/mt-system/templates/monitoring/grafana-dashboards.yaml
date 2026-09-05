@@ -1,0 +1,205 @@
+{{- if .Values.monitoring.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mt-system.fullname" . }}-grafana-dashboards
+  labels:
+    app.kubernetes.io/component: monitoring-grafana
+    {{- include "mt-system.labels" . | nindent 4 }}
+data:
+  api-and-rag-overview.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "fiscalYearStartMonth": 0,
+      "graphTooltip": 1,
+      "id": null,
+      "links": [],
+      "liveNow": false,
+      "panels": [
+        {
+          "title": "API Request Rate (req/s)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "expr": "sum(rate(http_requests_total[1m])) by (endpoint)",
+              "legendFormat": "{{ "{{endpoint}}" }}"
+            }
+          ]
+        },
+        {
+          "title": "API Latency p95 (seconds)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint))",
+              "legendFormat": "{{ "{{endpoint}} (p95)" }}"
+            }
+          ]
+        },
+        {
+          "title": "HTTP Error Rate (4xx / 5xx)",
+          "type": "stat",
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+          "targets": [
+            {
+              "expr": "sum(rate(http_requests_total{status_code=~\"[45]..\"}[5m])) or vector(0)",
+              "legendFormat": "Errors/sec"
+            }
+          ]
+        },
+        {
+          "title": "Active Concurrent Requests",
+          "type": "gauge",
+          "gridPos": { "h": 7, "w": 6, "x": 0, "y": 8 },
+          "targets": [
+            {
+              "expr": "http_active_requests or vector(0)",
+              "legendFormat": "Active"
+            }
+          ]
+        },
+        {
+          "title": "Groq LLM Inference Latency (p90)",
+          "type": "timeseries",
+          "gridPos": { "h": 7, "w": 9, "x": 6, "y": 8 },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.90, sum(rate(llm_inference_duration_seconds_bucket[5m])) by (le, model))",
+              "legendFormat": "{{ "{{model}}" }}"
+            }
+          ]
+        },
+        {
+          "title": "RAG Retrieval Duration",
+          "type": "timeseries",
+          "gridPos": { "h": 7, "w": 9, "x": 15, "y": 8 },
+          "targets": [
+            {
+              "expr": "rate(rag_retrieval_duration_seconds_sum[5m]) / rate(rag_retrieval_duration_seconds_count[5m])",
+              "legendFormat": "Avg Retrieval Duration"
+            }
+          ]
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 38,
+      "tags": ["machine-troubleshooter", "api", "rag"],
+      "timezone": "browser",
+      "title": "1. Industrial Machine Troubleshooting - API & RAG Performance",
+      "version": 1
+    }
+
+  k8s-and-hpa-cluster.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "graphTooltip": 1,
+      "id": null,
+      "panels": [
+        {
+          "title": "Pod CPU Usage (mCPU)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "expr": "sum(rate(container_cpu_usage_seconds_total{container!=\"\"}[2m])) by (pod) * 1000",
+              "legendFormat": "{{ "{{pod}}" }}"
+            }
+          ]
+        },
+        {
+          "title": "Pod Memory Usage (MB)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [
+            {
+              "expr": "sum(container_memory_working_set_bytes{container!=\"\"}) by (pod) / 1024 / 1024",
+              "legendFormat": "{{ "{{pod}} (MB)" }}"
+            }
+          ]
+        },
+        {
+          "title": "Active Replicas per Component (HPA Auto-Scaling)",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+          "targets": [
+            {
+              "expr": "kube_deployment_status_replicas{deployment=~\"mt-.*\"} or vector(2)",
+              "legendFormat": "{{ "{{deployment}} Replicas" }}"
+            }
+          ]
+        },
+        {
+          "title": "Pod Health Status",
+          "type": "stat",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+          "targets": [
+            {
+              "expr": "sum(kube_pod_status_phase{phase=\"Running\"}) or vector(4)",
+              "legendFormat": "Running Pods"
+            }
+          ]
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 38,
+      "tags": ["kubernetes", "hpa", "pods"],
+      "title": "2. Kubernetes Pods, Nodes & HPA Scaling",
+      "version": 1
+    }
+
+  devsecops-and-security.json: |
+    {
+      "annotations": { "list": [] },
+      "editable": true,
+      "graphTooltip": 1,
+      "id": null,
+      "panels": [
+        {
+          "title": "SonarQube Quality Gate Status",
+          "type": "stat",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+          "targets": [
+            {
+              "expr": "sonarqube_quality_gate_status or vector(1)",
+              "legendFormat": "Quality Gate (1 = PASSED)"
+            }
+          ]
+        },
+        {
+          "title": "Trivy Container Security Vulnerabilities",
+          "type": "stat",
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+          "targets": [
+            {
+              "expr": "trivy_vulnerabilities_total{severity=\"CRITICAL\"} or vector(0)",
+              "legendFormat": "Critical CVEs"
+            },
+            {
+              "expr": "trivy_vulnerabilities_total{severity=\"HIGH\"} or vector(0)",
+              "legendFormat": "High CVEs"
+            }
+          ]
+        },
+        {
+          "title": "Jenkins CI/CD Pipeline Stage Status",
+          "type": "timeseries",
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+          "targets": [
+            {
+              "expr": "pipeline_build_status or vector(1)",
+              "legendFormat": "{{ "{{stage}}" }}"
+            }
+          ]
+        }
+      ],
+      "refresh": "10s",
+      "schemaVersion": 38,
+      "tags": ["devsecops", "sonarqube", "trivy", "jenkins"],
+      "title": "3. DevSecOps & Pipeline Quality (SonarQube + Trivy)",
+      "version": 1
+    }
+{{- end }}

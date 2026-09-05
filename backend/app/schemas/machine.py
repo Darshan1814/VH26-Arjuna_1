@@ -21,6 +21,6 @@ class MachineResponse(BaseModel):
     manufacturer: Optional[str] = None
     category: Optional[str] = None
     description: Optional[str] = None
-    created_at: datetime
+    created_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

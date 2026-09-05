@@ -10,9 +10,9 @@ services:
       - .env
     volumes:
       - ./backend:/app
-      - ./manuals:/app/manuals
-      - ./database:/app/database
-      - model_cache:/app/model_cache
+      - ${DATA_VOLUME_PATH:-.}/manuals:/app/manuals
+      - ${DATA_VOLUME_PATH:-.}/database:/app/database
+      - ${DATA_VOLUME_PATH:-.}/model_cache:/app/model_cache
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
@@ -45,6 +45,33 @@ services:
       start_period: 30s
     restart: unless-stopped
 
-volumes:
-  model_cache:
-    driver: local
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: mt-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.enable-lifecycle"
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: mt-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
+    volumes:
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards:ro
+    depends_on:
+      - prometheus
+    restart: unless-stopped

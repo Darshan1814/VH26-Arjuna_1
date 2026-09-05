@@ -1,0 +1,21 @@
+{{- if .Values.monitoring.enabled -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "mt-system.fullname" . }}-grafana-datasources
+  labels:
+    app.kubernetes.io/component: monitoring-grafana
+    {{- include "mt-system.labels" . | nindent 4 }}
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus
+        type: prometheus
+        access: proxy
+        orgId: 1
+        url: http://{{ include "mt-system.fullname" . }}-prometheus:{{ .Values.monitoring.prometheus.port }}
+        isDefault: true
+        version: 1
+        editable: true
+{{- end }}

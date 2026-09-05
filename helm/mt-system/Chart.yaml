@@ -1,0 +1,14 @@
+apiVersion: v2
+name: mt-system
+description: Industrial Machine Troubleshooting System - RAG-based intelligent assistant
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+maintainers:
+  - name: Darshan Patil
+    email: darshan@example.com
+keywords:
+  - rag
+  - machine-troubleshooting
+  - industrial
+  - kubernetes

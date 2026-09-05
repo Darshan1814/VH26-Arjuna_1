@@ -460,11 +460,26 @@ Access:
 
 | Variable | Required | Default | Description |
 | :--- | :---: | :--- | :--- |
-| `OPENAI_API_KEY` | Optional* | `""` | Direct OpenAI API key for GPT-4o synthesis. |
-| `AZURE_OPENAI_ENDPOINT` | Optional* | `""` | Azure OpenAI resource endpoint. |
-| `AZURE_OPENAI_KEY` | Optional* | `""` | Azure OpenAI API key. |
-| `SUPABASE_URL` | **Yes** | `""` | URL of your Supabase project instance. |
-| `SUPABASE_KEY` | **Yes** | `""` | Supabase anon or service-role API key. |
+| `GROQ_API_KEY` | **Yes** | `""` | Ultra-fast inference API key for troubleshooting models. |
+| `ELEVENLABS_API_KEY` | **Yes** | `""` | Multilingual text-to-speech API key (Marathi, Hindi, English). |
+| `DATA_VOLUME_PATH` | No | `.` | Mount path for attached AWS EC2 EBS volume (e.g., `/mnt/data`). |
+| `SUPABASE_URL` | Optional | `""` | URL of your Supabase project instance (falls back to SQLite). |
+| `SUPABASE_KEY` | Optional | `""` | Supabase anon or service-role API key. |
 | `EMBEDDING_PROVIDER` | No | `local` | `local` (BAAI/bge-m3) or `openai`. |
 | `RERANKER_MODEL` | No | `BAAI/bge-reranker-v2-m3` | Cross-encoder model for neural reranking. |
-| `NEXT_PUBLIC_API_URL` | No | `http://localhost:8000` | Backend API URL used by the Next.js client. |
+| `NEXT_PUBLIC_API_URL` | No | `""` | Leave empty on EC2/Prod so browser routes via Next.js proxy without CORS/localhost errors. |
+| `BACKEND_URL` | No | `http://backend:8000` | Internal docker network backend URL used by Next.js server rewrites. |
+
+### AWS EC2 Attached Volume Setup (Persistent Storage)
+If you have an attached EBS volume on your EC2 instance:
+```bash
+# 1. Automatically detect, format (if new), mount to /mnt/data, and configure /etc/fstab:
+sudo ./mount-ebs-volume.sh
+
+# 2. Or specify your exact attached device name:
+sudo ./mount-ebs-volume.sh /dev/nvme1n1   # or /dev/xvdf
+
+# 3. Start or restart the application:
+docker compose down && docker compose up -d
+```
+All manuals (`/mnt/data/manuals`), database records (`/mnt/data/database/troubleshooter.db`), and model weights (`/mnt/data/model_cache`) are stored directly on the persistent EBS volume.

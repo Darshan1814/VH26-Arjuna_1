@@ -1,0 +1,22 @@
+{{- if .Values.monitoring.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "mt-system.fullname" . }}-prometheus
+  labels:
+    app.kubernetes.io/component: monitoring-prometheus
+    {{- include "mt-system.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.monitoring.prometheus.serviceType }}
+  ports:
+    - port: {{ .Values.monitoring.prometheus.port }}
+      targetPort: 9090
+      protocol: TCP
+      name: http
+      {{- if eq .Values.monitoring.prometheus.serviceType "NodePort" }}
+      nodePort: {{ .Values.monitoring.prometheus.nodePort }}
+      {{- end }}
+  selector:
+    app.kubernetes.io/component: monitoring-prometheus
+    app.kubernetes.io/name: {{ include "mt-system.name" . }}
+{{- end }}

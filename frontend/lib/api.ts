@@ -16,21 +16,23 @@ import type {
   ReportMeta,
 } from "@/types";
 
-const getApiBase = (): string => {
-  if (process.env.NEXT_PUBLIC_API_URL) {
-    return process.env.NEXT_PUBLIC_API_URL;
+export const getApiBase = (): string => {
+  if (process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.trim()) {
+    return process.env.NEXT_PUBLIC_API_URL.trim().replace(/\/$/, "");
   }
   if (typeof window !== "undefined") {
-    // In browser, communicate directly with backend port to avoid Next.js 30s proxy timeouts
-    return "http://localhost:8000";
+    // In browser on EC2 or production, use relative URL ("") so requests target the
+    // current host and route smoothly through Next.js rewrites to backend container
+    return "";
   }
-  return process.env.BACKEND_URL || "http://backend:8000";
+  return (process.env.BACKEND_URL || "http://backend:8000").replace(/\/$/, "");
 };
 
-const API_BASE = getApiBase();
+export const API_BASE = getApiBase();
 
 async function fetchAPI<T>(path: string, options?: RequestInit): Promise<T> {
-  const url = `${API_BASE}${path}`;
+  const base = getApiBase();
+  const url = `${base}${path}`;
   try {
     const res = await fetch(url, {
       headers: {
@@ -64,6 +66,10 @@ export async function getMachines(): Promise<Machine[]> {
   return fetchAPI<Machine[]>("/api/machines");
 }
 
+export async function getMachine(id: string): Promise<Machine> {
+  return fetchAPI<Machine>(`/api/machines/${id}`);
+}
+
 // === Manuals & Knowledge Upload ===
 
 export async function getManuals(machineId?: string): Promise<Manual[]> {
@@ -85,13 +91,14 @@ export async function uploadManual(
   formData.append("machine_id", machineId);
   formData.append("title", title);
 
-  const res = await fetch(`${API_BASE}/api/manuals/upload`, {
+  const res = await fetch(`${getApiBase()}/api/manuals/upload`, {
     method: "POST",
     body: formData,
   });
 
   if (!res.ok) {
-    throw new Error(`Upload failed: ${res.statusText}`);
+    const err = await res.text().catch(() => "");
+    throw new Error(`Upload failed (${res.status}): ${err || res.statusText}`);
   }
 
   return res.json();
@@ -109,14 +116,14 @@ export async function uploadKnowledgeFiles(
     formData.append("machine_model", machineModel);
   }
 
-  const res = await fetch(`${API_BASE}/api/upload/knowledge`, {
+  const res = await fetch(`${getApiBase()}/api/upload/knowledge`, {
     method: "POST",
     body: formData,
   });
 
   if (!res.ok) {
-    const err = await res.text().catch(() => "Upload failed");
-    throw new Error(`Upload error: ${err}`);
+    const err = await res.text().catch(() => "");
+    throw new Error(`Upload failed (${res.status}): ${err || res.statusText}`);
   }
 
   return res.json();
@@ -213,6 +220,26 @@ export async function generateReport(payload: any): Promise<{
 
 export async function getReportMeta(reportId: string): Promise<ReportMeta> {
   return fetchAPI<ReportMeta>(`/api/reports/${reportId}`);
+}
+
+export async function downloadDirectPDF(payload: any, filename?: string): Promise<void> {
+  const res = await fetch("/api/reports/download-direct-pdf", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to generate PDF: ${res.statusText}`);
+  }
+  const blob = await res.blob();
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || `Diagnostic_Report_${payload.report_id || Date.now()}.pdf`;
+  document.body.appendChild(a);
+  a.click();
+  window.URL.revokeObjectURL(url);
+  document.body.removeChild(a);
 }
 
 // === Conversations ===
