@@ -225,65 +225,79 @@ pipeline {
             steps {
                 echo "===> Deploying directly to production using Docker Compose..."
                 script {
-                    sh """
-                        # --- Generate production .env ---
-                        cat > .env <<ENVEOF
-GROQ_API_KEY=${GROQ_API_KEY}
-GROQ_MODEL=${GROQ_MODEL}
-GROQ_FAST_MODEL=${GROQ_FAST_MODEL}
-GROQ_REASONING_MODEL=${GROQ_REASONING_MODEL}
-GROQ_VISION_MODEL=${GROQ_VISION_MODEL}
-ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}
-ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}
-ELEVENLABS_FALLBACK_VOICE_ID=${ELEVENLABS_FALLBACK_VOICE_ID}
-ELEVENLABS_MODEL_ID=${ELEVENLABS_MODEL_ID}
-SERPER_API_KEY=${SERPER_API_KEY}
-SUPABASE_URL=${SUPABASE_URL}
-SUPABASE_KEY=${SUPABASE_KEY}
-SUPABASE_ANON_KEY=${SUPABASE_KEY}
-SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
-SUPABASE_STORAGE_BUCKET=manuals
-EMBEDDING_MODEL=BAAI/bge-m3
-EMBEDDING_DIMENSION=1024
-RERANKER_MODEL=BAAI/bge-reranker-v2-m3
-HF_HOME=/app/model_cache
-MANUALS_DIR=/app/manuals
-SQLITE_DB_PATH=/app/database/troubleshooter.db
-BACKEND_HOST=0.0.0.0
-BACKEND_PORT=8000
-LOG_LEVEL=info
-NEXT_PUBLIC_API_URL=
-NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}
-NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_KEY}
-BACKEND_URL=http://backend:8000
-DATA_VOLUME_PATH=.
-ENVEOF
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                        sh """
+                            export PATH="\$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/snap/bin:\$HOME/bin:\$HOME/.local/bin"
 
-                        # --- Tag / Pull latest images ---
-                        echo "Tagging and preparing images for production..."
-                        docker tag ${BACKEND_IMAGE}:${IMAGE_TAG} ${BACKEND_IMAGE}:latest 2>/dev/null || true
-                        docker tag ${FRONTEND_IMAGE}:${IMAGE_TAG} ${FRONTEND_IMAGE}:latest 2>/dev/null || true
+                            # --- Generate production .env without heredoc ---
+                            echo "Writing production .env file..."
+                            echo "GROQ_API_KEY=${GROQ_API_KEY}" > .env
+                            echo "GROQ_MODEL=${GROQ_MODEL}" >> .env
+                            echo "GROQ_FAST_MODEL=${GROQ_FAST_MODEL}" >> .env
+                            echo "GROQ_REASONING_MODEL=${GROQ_REASONING_MODEL}" >> .env
+                            echo "GROQ_VISION_MODEL=${GROQ_VISION_MODEL}" >> .env
+                            echo "ELEVENLABS_API_KEY=${ELEVENLABS_API_KEY}" >> .env
+                            echo "ELEVENLABS_VOICE_ID=${ELEVENLABS_VOICE_ID}" >> .env
+                            echo "ELEVENLABS_FALLBACK_VOICE_ID=${ELEVENLABS_FALLBACK_VOICE_ID}" >> .env
+                            echo "ELEVENLABS_MODEL_ID=${ELEVENLABS_MODEL_ID}" >> .env
+                            echo "SERPER_API_KEY=${SERPER_API_KEY}" >> .env
+                            echo "SUPABASE_URL=${SUPABASE_URL}" >> .env
+                            echo "SUPABASE_KEY=${SUPABASE_KEY}" >> .env
+                            echo "SUPABASE_ANON_KEY=${SUPABASE_KEY}" >> .env
+                            echo "SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}" >> .env
+                            echo "SUPABASE_STORAGE_BUCKET=manuals" >> .env
+                            echo "EMBEDDING_MODEL=BAAI/bge-m3" >> .env
+                            echo "EMBEDDING_DIMENSION=1024" >> .env
+                            echo "RERANKER_MODEL=BAAI/bge-reranker-v2-m3" >> .env
+                            echo "HF_HOME=/app/model_cache" >> .env
+                            echo "MANUALS_DIR=/app/manuals" >> .env
+                            echo "SQLITE_DB_PATH=/app/database/troubleshooter.db" >> .env
+                            echo "BACKEND_HOST=0.0.0.0" >> .env
+                            echo "BACKEND_PORT=8000" >> .env
+                            echo "LOG_LEVEL=info" >> .env
+                            echo "NEXT_PUBLIC_API_URL=" >> .env
+                            echo "NEXT_PUBLIC_SUPABASE_URL=${SUPABASE_URL}" >> .env
+                            echo "NEXT_PUBLIC_SUPABASE_ANON_KEY=${SUPABASE_KEY}" >> .env
+                            echo "BACKEND_URL=http://backend:8000" >> .env
+                            echo "DATA_VOLUME_PATH=." >> .env
 
-                        # --- Restart containers directly ---
-                        echo "Restarting production containers..."
-                        docker compose down --remove-orphans || docker-compose down --remove-orphans || true
-                        docker compose up -d --force-recreate backend frontend || docker-compose up -d --force-recreate backend frontend
+                            # --- Tag built images as latest for local runner ---
+                            echo "Tagging production images..."
+                            docker tag ${BACKEND_IMAGE}:${IMAGE_TAG} ${BACKEND_IMAGE}:latest 2>/dev/null || true
+                            docker tag ${FRONTEND_IMAGE}:${IMAGE_TAG} ${FRONTEND_IMAGE}:latest 2>/dev/null || true
 
-                        echo "Waiting 30s for containers to initialize..."
-                        sleep 30
+                            # --- Determine compose command ---
+                            if docker compose version >/dev/null 2>&1; then
+                                COMPOSE_CMD="docker compose"
+                            elif docker-compose version >/dev/null 2>&1; then
+                                COMPOSE_CMD="docker-compose"
+                            else
+                                echo "WARNING: Neither docker compose nor docker-compose found in PATH."
+                                COMPOSE_CMD="docker compose"
+                            fi
+                            echo "Using compose command: \$COMPOSE_CMD"
 
-                        # --- Verify health ---
-                        echo "=== Container Status ==="
-                        docker compose ps || docker-compose ps || true
+                            # --- Restart containers directly ---
+                            echo "Restarting production containers..."
+                            \$COMPOSE_CMD down --remove-orphans 2>/dev/null || true
+                            \$COMPOSE_CMD up -d --force-recreate backend frontend
 
-                        echo "=== Health Checks ==="
-                        curl -sf http://localhost:8000/health \
-                            && echo "BACKEND: HEALTHY (:8000)" || echo "Backend initializing..."
-                        curl -sf -o /dev/null http://localhost:3000 \
-                            && echo "FRONTEND: HEALTHY (:3000)" || echo "Frontend initializing..."
+                            echo "Waiting 25s for containers to initialize..."
+                            sleep 25
 
-                        echo "=== Deployment Complete: Build #${IMAGE_TAG} is LIVE in Production! ==="
-                    """
+                            # --- Verify health ---
+                            echo "=== Container Status ==="
+                            \$COMPOSE_CMD ps || true
+
+                            echo "=== Health Checks ==="
+                            curl -sf http://localhost:8000/health \
+                                && echo "BACKEND: HEALTHY (:8000)" || echo "Backend initializing..."
+                            curl -sf -o /dev/null http://localhost:3000 \
+                                && echo "FRONTEND: HEALTHY (:3000)" || echo "Frontend initializing..."
+
+                            echo "=== Deployment Complete: Build #${IMAGE_TAG} is LIVE in Production! ==="
+                        """
+                    }
                 }
             }
         }
