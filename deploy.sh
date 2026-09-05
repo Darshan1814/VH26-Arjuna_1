@@ -64,7 +64,8 @@ docker volume create mt-model-cache 2>/dev/null || true
 
 # 4. Launch Backend container
 echo "Launching mt-backend container..."
-docker run -d \
+docker rm -f mt-backend 2>/dev/null || true
+if ! docker run -d \
     --name mt-backend \
     --network host \
     --restart unless-stopped \
@@ -72,31 +73,40 @@ docker run -d \
     -v mt-manuals:/app/manuals \
     -v mt-database:/app/database \
     -v mt-model-cache:/app/model_cache \
-    "${BACKEND_IMG}:${TAG}" || \
-docker run -d \
-    --name mt-backend \
-    -p 8000:8000 \
-    --restart unless-stopped \
-    --env-file "$ENV_FILE" \
-    -v mt-manuals:/app/manuals \
-    -v mt-database:/app/database \
-    -v mt-model-cache:/app/model_cache \
-    "${BACKEND_IMG}:${TAG}"
+    "${BACKEND_IMG}:${TAG}" 2>/dev/null; then
+    
+    echo "Host network unavailable, falling back to port 8000:8000..."
+    docker rm -f mt-backend 2>/dev/null || true
+    docker run -d \
+        --name mt-backend \
+        -p 8000:8000 \
+        --restart unless-stopped \
+        --env-file "$ENV_FILE" \
+        -v mt-manuals:/app/manuals \
+        -v mt-database:/app/database \
+        -v mt-model-cache:/app/model_cache \
+        "${BACKEND_IMG}:${TAG}" || true
+fi
 
 # 5. Launch Frontend container
 echo "Launching mt-frontend container..."
-docker run -d \
+docker rm -f mt-frontend 2>/dev/null || true
+if ! docker run -d \
     --name mt-frontend \
     --network host \
     --restart unless-stopped \
     -e BACKEND_URL="http://localhost:8000" \
-    "${FRONTEND_IMG}:${TAG}" || \
-docker run -d \
-    --name mt-frontend \
-    -p 3000:3000 \
-    --restart unless-stopped \
-    -e BACKEND_URL="http://localhost:8000" \
-    "${FRONTEND_IMG}:${TAG}"
+    "${FRONTEND_IMG}:${TAG}" 2>/dev/null; then
+
+    echo "Host network unavailable, falling back to port 3000:3000..."
+    docker rm -f mt-frontend 2>/dev/null || true
+    docker run -d \
+        --name mt-frontend \
+        -p 3000:3000 \
+        --restart unless-stopped \
+        -e BACKEND_URL="http://localhost:8000" \
+        "${FRONTEND_IMG}:${TAG}" || true
+fi
 
 # 6. Wait for initialization
 echo "Waiting 15s for containers to initialize..."
