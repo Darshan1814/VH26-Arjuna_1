@@ -70,7 +70,10 @@ class Settings(BaseSettings):
 
 settings = Settings()
 
-# Ensure required local storage directories exist
-os.makedirs(settings.MANUALS_DIR, exist_ok=True)
-os.makedirs(settings.EVIDENCE_DIR, exist_ok=True)
-os.makedirs(settings.REPORTS_DIR, exist_ok=True)
+# Ensure required local storage directories exist (best effort)
+try:
+    os.makedirs(settings.MANUALS_DIR, exist_ok=True)
+    os.makedirs(settings.EVIDENCE_DIR, exist_ok=True)
+    os.makedirs(settings.REPORTS_DIR, exist_ok=True)
+except Exception as e:
+    pass

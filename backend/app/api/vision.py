@@ -469,12 +469,18 @@ Return ONLY a JSON object:
         logger.error(f"LLM reasoning failed: {e}")
         data = {}
 
+    resolved_machine = final_machine
+    if resolved_machine in ("Unknown Machine", "Industrial Machinery") and data.get("detected_machine"):
+        resolved_machine = data.get("detected_machine")
+
+    resolved_error = detected_code or data.get("detected_error_code") or "FAULT-INSPECTION"
+
     return ImageAnalysisResponse(
         ocr_text=formatted_display,
-        detected_error_code=data.get("detected_error_code") or detected_code or "FAULT-INSPECTION",
-        detected_machine=data.get("detected_machine") or final_machine,
-        problem=data.get("problem", f"{final_machine} — Fault Diagnosis"),
-        diagnosis=data.get("diagnosis", f"Diagnosis for {final_machine}."),
+        detected_error_code=resolved_error,
+        detected_machine=resolved_machine,
+        problem=data.get("problem", f"{resolved_machine} — {resolved_error} Fault Diagnosis"),
+        diagnosis=data.get("diagnosis", f"Diagnosis for {resolved_machine}."),
         answer=data.get("answer", "Follow OEM service manual for repair."),
         probable_causes=data.get("probable_causes", ["See OEM manual", "Inspect display code", "Check components"]),
         corrective_steps=data.get("corrective_steps", ["Safety isolation", "Diagnose fault", "Repair", "Test"]),

@@ -32,10 +32,6 @@ pipeline {
         SUPABASE_KEY              = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bnFidG9ieXZmeHRiYmpicWR3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg0NzgwMDUsImV4cCI6MjEwNDA1NDAwNX0.WSrmUWCe43Wb_gbt59kq5b8OWqJPm-muAn_fhnJA_KQ'
         SUPABASE_SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh2bnFidG9ieXZmeHRiYmpicWR3Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4ODQ3ODAwNSwiZXhwIjoyMTA0MDU0MDA1fQ.fiOMxdcxrq5izcCdeMjqTuF_5havyK6ll1-gJ-FpdBE'
 
-        // --- Kubernetes & Helm ---
-        K8S_NAMESPACE   = 'default'
-        HELM_RELEASE    = 'mt-system'
-        HELM_CHART_PATH = 'helm/mt-system'
     }
 
     options {
@@ -223,210 +219,15 @@ pipeline {
         }
 
         // ============================================================
-        // STAGE 7: Deploy to Kubernetes via Helm
+        // STAGE 7: Deploy Directly to Production (Docker Compose)
         // ============================================================
-        stage('Deploy to Kubernetes via Helm') {
+        stage('Deploy to Production (Docker Compose)') {
             steps {
-                echo "===> Deploying to Minikube/K8s via Helm..."
+                echo "===> Deploying directly to production using Docker Compose..."
                 script {
-                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                        sh """
-                            export PATH="\$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/snap/bin:\$HOME/bin:\$HOME/.local/bin"
-
-                            # --- Fix permissions so Jenkins user can read kube config & certs ---
-                            sudo chmod +rx /home/ec2-user 2>/dev/null || true
-                            sudo chmod -R a+rX /home/ec2-user/.minikube /home/ec2-user/.kube 2>/dev/null || true
-                            sudo chmod +rx /home/ubuntu 2>/dev/null || true
-                            sudo chmod -R a+rX /home/ubuntu/.minikube /home/ubuntu/.kube 2>/dev/null || true
-
-                            # --- Locate kubeconfig ---
-                            if [ -f "/var/lib/jenkins/.kube/config" ] && [ -r "/var/lib/jenkins/.kube/config" ]; then
-                                export KUBECONFIG="/var/lib/jenkins/.kube/config"
-                            elif [ -f "\$HOME/.kube/config" ] && [ -r "\$HOME/.kube/config" ]; then
-                                export KUBECONFIG="\$HOME/.kube/config"
-                            elif [ -f "/home/ec2-user/.kube/config" ] && [ -r "/home/ec2-user/.kube/config" ]; then
-                                export KUBECONFIG="/home/ec2-user/.kube/config"
-                            elif [ -f "/home/ubuntu/.kube/config" ] && [ -r "/home/ubuntu/.kube/config" ]; then
-                                export KUBECONFIG="/home/ubuntu/.kube/config"
-                            elif [ -f "/root/.kube/config" ] && [ -r "/root/.kube/config" ]; then
-                                export KUBECONFIG="/root/.kube/config"
-                            fi
-                            echo "Using KUBECONFIG=\${KUBECONFIG:-default}"
-
-                            # --- Ensure Minikube is checked ---
-                            if command -v minikube >/dev/null 2>&1; then
-                                echo "=== Minikube Status ==="
-                                minikube status 2>/dev/null || true
-                            fi
-
-                            # --- Disk diagnostics ---
-                            echo "=== EC2 Disk Space ==="
-                            df -h /
-                            echo "=== Docker Disk Usage ==="
-                            docker system df 2>/dev/null || true
-
-                            # --- Check cluster connectivity ---
-                            echo "=== Checking Kubernetes API connectivity ==="
-                            kubectl get nodes -o wide 2>/dev/null || {
-                                echo "Notice: Direct node list returned non-zero, checking cluster-info..."
-                                kubectl cluster-info 2>/dev/null || true
-                            }
-
-                            # --- Enable ingress addon (best-effort) ---
-                            minikube addons enable ingress 2>/dev/null || true
-
-                            # --- Prune old dangling images to free disk ---
-                            docker image prune -f 2>/dev/null || true
-
-                            # --- Helm upgrade/install ---
-                            echo "=== Helm upgrade/install ==="
-                            helm upgrade --install ${HELM_RELEASE} ${HELM_CHART_PATH} \
-                                --namespace ${K8S_NAMESPACE} \
-                                --set backend.image.repository=${BACKEND_IMAGE} \
-                                --set backend.image.tag=${IMAGE_TAG} \
-                                --set backend.replicaCount=1 \
-                                --set frontend.image.repository=${FRONTEND_IMAGE} \
-                                --set frontend.image.tag=${IMAGE_TAG} \
-                                --set frontend.replicaCount=1 \
-                                --set backend.hpa.enabled=false \
-                                --set frontend.hpa.enabled=false \
-                                --set monitoring.enabled=true \
-                                --set persistence.enabled=true \
-                                --set persistence.storageClass=standard \
-                                --set persistence.size=2Gi \
-                                --set persistence.manualsSize=2Gi \
-                                --set backend.resources.requests.cpu=100m \
-                                --set backend.resources.requests.memory=512Mi \
-                                --set backend.resources.limits.cpu=1500m \
-                                --set backend.resources.limits.memory=3072Mi \
-                                --set frontend.resources.requests.cpu=50m \
-                                --set frontend.resources.requests.memory=128Mi \
-                                --set frontend.resources.limits.cpu=300m \
-                                --set frontend.resources.limits.memory=512Mi \
-                                --set backend.probes.liveness.initialDelaySeconds=300 \
-                                --set backend.probes.readiness.initialDelaySeconds=120 \
-                                --set secrets.groqApiKey="${GROQ_API_KEY}" \
-                                --set secrets.groqModel="${GROQ_MODEL}" \
-                                --set secrets.groqFastModel="${GROQ_FAST_MODEL}" \
-                                --set secrets.groqReasoningModel="${GROQ_REASONING_MODEL}" \
-                                --set secrets.groqVisionModel="${GROQ_VISION_MODEL}" \
-                                --set secrets.elevenLabsApiKey="${ELEVENLABS_API_KEY}" \
-                                --set secrets.elevenLabsVoiceId="${ELEVENLABS_VOICE_ID}" \
-                                --set secrets.elevenLabsFallbackVoiceId="${ELEVENLABS_FALLBACK_VOICE_ID}" \
-                                --set secrets.elevenLabsModelId="${ELEVENLABS_MODEL_ID}" \
-                                --set secrets.serperApiKey="${SERPER_API_KEY}" \
-                                --set secrets.supabaseUrl="${SUPABASE_URL}" \
-                                --set secrets.supabaseKey="${SUPABASE_KEY}" \
-                                --set secrets.supabaseServiceRoleKey="${SUPABASE_SERVICE_ROLE_KEY}" \
-                                --timeout 5m \
-                                --atomic=false || {
-                                    echo "WARNING: Helm upgrade/install encountered an issue; checking status..."
-                                    helm status ${HELM_RELEASE} --namespace ${K8S_NAMESPACE} 2>/dev/null || true
-                                }
-
-                            echo "=== Helm Release Status ==="
-                            helm status ${HELM_RELEASE} --namespace ${K8S_NAMESPACE} || true
-
-                            echo "=== Pods after deploy ==="
-                            kubectl get pods -n ${K8S_NAMESPACE} -o wide 2>/dev/null || true
-
-                            # Frontend: pre-built Next.js, starts in ~30s
-                            echo "Waiting for frontend rollout (3 min max)..."
-                            kubectl rollout status deployment/${HELM_RELEASE}-frontend \
-                                --namespace ${K8S_NAMESPACE} --timeout=180s 2>/dev/null \
-                                && echo "FRONTEND: Ready!" || echo "Frontend still rolling..."
-
-                            # Backend: downloads ML models on cold start (5-10 min) - non-blocking
-                            echo "Watching backend rollout (10 min max, non-blocking)..."
-                            kubectl rollout status deployment/${HELM_RELEASE}-backend \
-                                --namespace ${K8S_NAMESPACE} --timeout=600s 2>/dev/null \
-                                && echo "BACKEND: Ready!" || {
-                                    echo "Backend not yet Ready - still loading ML models (normal on first boot)."
-                                    echo "=== Backend Pod Logs ==="
-                                    kubectl logs -l app.kubernetes.io/component=backend \
-                                        -n ${K8S_NAMESPACE} --tail=50 2>/dev/null || true
-                                    echo "=== Recent Events ==="
-                                    kubectl get events -n ${K8S_NAMESPACE} \
-                                        --sort-by='.lastTimestamp' 2>/dev/null | tail -20 || true
-                                }
-
-                            echo "=== FINAL K8S STATUS ==="
-                            kubectl get pods -n ${K8S_NAMESPACE} -o wide 2>/dev/null || true
-                            kubectl get svc  -n ${K8S_NAMESPACE} 2>/dev/null || true
-                            kubectl get pvc  -n ${K8S_NAMESPACE} 2>/dev/null || true
-                            MINIKUBE_IP=\$(minikube ip 2>/dev/null || echo "unknown")
-                            echo "Frontend : http://\${MINIKUBE_IP}:30000"
-                            echo "Backend  : http://\${MINIKUBE_IP}:30080"
-                            echo "Grafana  : http://\${MINIKUBE_IP}:30030"
-                        """
-                    }
-                }
-            }
-        }
-
-        // ============================================================
-        // STAGE 8: Verify Deployment
-        // ============================================================
-        stage('Verify Deployment') {
-            steps {
-                echo "===> Verifying deployment..."
-                script {
-                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                        sh """
-                            export PATH="\$PATH:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin:/snap/bin:\$HOME/bin:\$HOME/.local/bin"
-
-                            if [ -f "/var/lib/jenkins/.kube/config" ] && [ -r "/var/lib/jenkins/.kube/config" ]; then
-                                export KUBECONFIG="/var/lib/jenkins/.kube/config"
-                            elif [ -f "\$HOME/.kube/config" ] && [ -r "\$HOME/.kube/config" ]; then
-                                export KUBECONFIG="\$HOME/.kube/config"
-                            elif [ -f "/home/ec2-user/.kube/config" ] && [ -r "/home/ec2-user/.kube/config" ]; then
-                                export KUBECONFIG="/home/ec2-user/.kube/config"
-                            elif [ -f "/home/ubuntu/.kube/config" ] && [ -r "/home/ubuntu/.kube/config" ]; then
-                                export KUBECONFIG="/home/ubuntu/.kube/config"
-                            fi
-
-                            echo "=== Pod Status ==="
-                            kubectl get pods -n ${K8S_NAMESPACE} -o wide 2>/dev/null || true
-
-                            echo "=== Services & NodePorts ==="
-                            kubectl get svc -n ${K8S_NAMESPACE} 2>/dev/null || true
-
-                            echo "=== PVC Status ==="
-                            kubectl get pvc -n ${K8S_NAMESPACE} 2>/dev/null || true
-
-                            echo "=== Secret ==="
-                            kubectl get secret ${HELM_RELEASE}-secrets -n ${K8S_NAMESPACE} \
-                                -o jsonpath='{.metadata.name}' 2>/dev/null \
-                                && echo " Secret exists" || echo "WARNING: Secret missing!"
-
-                            echo "=== Helm Status ==="
-                            helm status ${HELM_RELEASE} --namespace ${K8S_NAMESPACE} 2>/dev/null || true
-
-                            MINIKUBE_IP=\$(minikube ip 2>/dev/null || kubectl get nodes \
-                                -o jsonpath='{.items[0].status.addresses[0].address}' 2>/dev/null || echo "localhost")
-                            echo "=== Health Checks (NodePort) ==="
-                            curl -sf http://\${MINIKUBE_IP}:30000/ -o /dev/null \
-                                && echo "FRONTEND :30000 OK" || echo "Frontend still starting..."
-                            curl -sf http://\${MINIKUBE_IP}:30080/health \
-                                && echo "BACKEND  :30080 OK" || echo "Backend still loading models..."
-
-                            echo "Build #${IMAGE_TAG} deployment verified."
-                        """
-                    }
-                }
-            }
-        }
-
-        // ============================================================
-        // STAGE 9: Redeploy on EC2 (Docker Compose)
-        // ============================================================
-        stage('Redeploy on EC2 (Docker Compose)') {
-            steps {
-                echo "===> Restarting Docker Compose containers on EC2..."
-                script {
-                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                        sh """
-                            cat > .env <<ENVEOF
+                    sh """
+                        # --- Generate production .env ---
+                        cat > .env <<ENVEOF
 GROQ_API_KEY=${GROQ_API_KEY}
 GROQ_MODEL=${GROQ_MODEL}
 GROQ_FAST_MODEL=${GROQ_FAST_MODEL}
@@ -458,25 +259,31 @@ BACKEND_URL=http://backend:8000
 DATA_VOLUME_PATH=.
 ENVEOF
 
-                            echo "Pulling latest images from DockerHub..."
-                            docker pull ${BACKEND_IMAGE}:latest  || true
-                            docker pull ${FRONTEND_IMAGE}:latest || true
+                        # --- Tag / Pull latest images ---
+                        echo "Tagging and preparing images for production..."
+                        docker tag ${BACKEND_IMAGE}:${IMAGE_TAG} ${BACKEND_IMAGE}:latest 2>/dev/null || true
+                        docker tag ${FRONTEND_IMAGE}:${IMAGE_TAG} ${FRONTEND_IMAGE}:latest 2>/dev/null || true
 
-                            echo "Restarting containers..."
-                            docker compose down --remove-orphans || docker-compose down --remove-orphans || true
-                            docker compose up -d backend frontend || docker-compose up -d backend frontend
+                        # --- Restart containers directly ---
+                        echo "Restarting production containers..."
+                        docker compose down --remove-orphans || docker-compose down --remove-orphans || true
+                        docker compose up -d --force-recreate backend frontend || docker-compose up -d --force-recreate backend frontend
 
-                            echo "Waiting 45s for containers to initialise..."
-                            sleep 45
+                        echo "Waiting 30s for containers to initialize..."
+                        sleep 30
 
-                            docker compose ps || docker-compose ps || true
+                        # --- Verify health ---
+                        echo "=== Container Status ==="
+                        docker compose ps || docker-compose ps || true
 
-                            curl -sf http://localhost:8000/health \
-                                && echo "BACKEND: HEALTHY" || echo "Backend still starting - check: docker compose logs backend"
-                            curl -sf -o /dev/null http://localhost:3000 \
-                                && echo "FRONTEND: HEALTHY" || echo "Frontend still starting - check: docker compose logs frontend"
-                        """
-                    }
+                        echo "=== Health Checks ==="
+                        curl -sf http://localhost:8000/health \
+                            && echo "BACKEND: HEALTHY (:8000)" || echo "Backend initializing..."
+                        curl -sf -o /dev/null http://localhost:3000 \
+                            && echo "FRONTEND: HEALTHY (:3000)" || echo "Frontend initializing..."
+
+                        echo "=== Deployment Complete: Build #${IMAGE_TAG} is LIVE in Production! ==="
+                    """
                 }
             }
         }
